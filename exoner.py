@@ -10,5 +10,5 @@ import psl_parser
 fname = sys.argv[1]
 
 for line in psl_parser.read(open(fname)):
-    print line['qName'], line['tName'], line['qStarts'], line['tStarts']
+    print line.attrib['qName'], line.attrib['tName'], line.attrib['qStarts'], line.attrib['tStarts']
     break
