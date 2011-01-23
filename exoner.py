@@ -5,7 +5,7 @@
 '''
 
 import sys
-import psl-parser
+import psl_parser
 
 fname = sys.argv[1]
 
