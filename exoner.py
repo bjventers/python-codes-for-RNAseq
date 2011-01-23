@@ -9,6 +9,6 @@ import psl_parser
 
 fname = sys.argv[1]
 
-for line in psl-parser.read(open(fname)):
+for line in psl_parser.read(open(fname)):
     print line['qName'], line['tName'], line['qStarts'], line['tStarts']
     break
