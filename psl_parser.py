@@ -10,11 +10,13 @@ class PSL(object):
     def __init__(self, **kwargs):
         self.attrib = kwargs
 
-def read(fobj):
+def read(fobj, comment):
     '''
-        fobj = file object
+        fobj = file object.
+        comment = read() will ignore the line starting with comment character.
     '''
     for line in fobj:
+        if line.startswith(comment): continue
         attrib = {}
         rows = line.split()
         attrib['matches'] = rows[0]
@@ -39,7 +41,7 @@ def read(fobj):
         attrib['qStarts'] = rows[19].split(',')[:-1]
         attrib['tStarts'] = rows[20].split(',')[:-1]
         
-        pobj = PSL(attrib) # pobj = PSL object
+        pobj = PSL(**attrib) # pobj = PSL object
         yield pobj
 
 if __name__ == '__main__':

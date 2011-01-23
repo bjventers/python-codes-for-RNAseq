@@ -8,7 +8,7 @@ import sys
 import psl_parser
 
 fname = sys.argv[1]
-
-for line in psl_parser.read(open(fname)):
+comment = 'track'
+for line in psl_parser.read(open(fname), comment):
     print line.attrib['qName'], line.attrib['tName'], line.attrib['qStarts'], line.attrib['tStarts']
     break
