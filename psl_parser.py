@@ -9,6 +9,12 @@ import sys
 class PSL(object):
     def __init__(self, **kwargs):
         self.attrib = kwargs
+        for i in range(len(self.attrib['blockSizes'])):
+            self.attrib['blockSizes'][i] = int(self.attrib['blockSizes'][i])
+        for i in range(len(self.attrib['qStarts'])):
+            self.attrib['qStarts'][i] = int(self.attrib['qStarts'][i]) 
+        for i in range(len(self.attrib['tStarts'])):
+            self.attrib['tStarts'][i] = int(self.attrib['tStarts'][i])
 
 def read(fobj, comment):
     '''
