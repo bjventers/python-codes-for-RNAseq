@@ -14,6 +14,8 @@ class Exon(object):
         self.start = start
         self.end = end
         self.junctions = junctions
+        self.cluster = []
+        self.connected_exons = [(sorted(start)[0], end)]
 
 def construct(aln_obj, exons):
     for i in range(len(aln.attrib['tStarts'][:-1])):
@@ -34,40 +36,81 @@ def construct(aln_obj, exons):
     else:
         exons[last_exon_end] = Exon(aln.attrib['tName'], [last_exon_start], last_exon_end, [])
 
-def join(exons, ex_end, all):
-    if exons[ex_end].junctions:
-        for exon in exons[ex_end].junctions:
-            start, end = exon
-            all.append((start, end))
-            join(exons, end, all)
+def join(exons, exon_end, grouped, new_cluster, all_connected_exons, add_clusters):
+    grouped.append(exon_end) # grouped exons will not be used to from a new cluster
+    if exons[exon_end].junctions:
+        for junc in exons[exon_end].junctions:
+            start, end = junc
+            all_connected_exons.append((sorted(exons[end].start)[0], exons[end].end))
+            if new_cluster not in exons[end].cluster:
+                exons[end].cluster.append(new_cluster) # add new cluster to the exon's cluster list.
+            for c in exons[end].cluster:
+                if c not in add_clusters:
+                    add_clusters.append(c)
+            join(exons, end, grouped, new_cluster, all_connected_exons, add_clusters)
     else:
         return
 
+def cluster(exons):
+    grouped = []
+    exon_clusters = []
+    print >> sys.stderr, 'Clustering ...'
+    for e in sorted(exons):
+        if e in grouped: 
+            continue
+        else:
+            all_connected_exons = []
+            add_clusters = []
+            exons[e].cluster.append(e) # the exon belongs to its cluster
+            join(exons, exons[e].end, grouped, e, all_connected_exons, add_clusters)
+            if add_clusters:
+                for start,end in all_connected_exons:
+                    for c in add_clusters:
+                        if c not in exons[end].cluster:
+                            exons[end].cluster.append(c)
+                        if (start, end) not in exons[c].connected_exons:
+                            exons[c].connected_exons.append((start, end))
+                for c in add_clusters:
+                    if c not in exons[e].cluster:
+                        exons[e].cluster.append(c)
+                        
+                    if (sorted(exons[e].start)[0], exons[e].end) not in exons[c].connected_exons:
+                        exons[c].connected_exons.append((sorted(exons[e].start)[0], exons[e].end))
+            if len(exons[e].cluster) == 1: 
+                '''
+                    If the cluster does not contain any exon that shared with other clusters,
+                    add it to a group of unique cluster.
+                '''
+                exon_clusters.append(e)
+    return exon_clusters
+
+def printout_PSL(exons, exon_clusters):
+    for e in exon_clusters:
+        new_junctions = {} 
+        connected_exons = sorted(exons[e].connected_exons)
+        if connected_exons:
+            for j in connected_exons:
+                if j[0] not in new_junctions:
+                    new_junctions[j[0]] = j[-1]
+                else:
+                    if j[-1] > new_junctions[j[0]]:
+                        new_junctions[j[0]] = j[-1]
+        if len(new_junctions) > 1:
+            chromStart = connected_exons[0][0]
+            blockStarts = [str(j - chromStart) for j in sorted(new_junctions)]
+            #blockStarts.insert(0,'0')
+            blockSizes = [str(new_junctions[j] - j) for j in sorted(new_junctions)]
+            #blockSizes.insert(0,str(exons[e].end-chromStart))
+            blockEnds = [int(new_junctions[j]) for j in sorted(new_junctions)]
+            chromEnd = blockEnds[-1]
+            blockCount = len(new_junctions)
+            print >> sys.stdout, '%s\t%d\t%d\ttest\t1000\t+\t%d\t%d\t0,0,255\t%d\t%s\t%s' % (exons[e].chr, chromStart, chromEnd, chromStart, chromEnd, blockCount, ','.join(blockSizes), ','.join(blockStarts))
+
 if __name__ == '__main__':
+    print >> sys.stderr, 'Constructing exons ...'
     exons = {}
     for aln in psl_parser.read(open(sys.argv[1]), 'track'):
         construct(aln, exons)
-
-    for e in exons:
-        if len(exons[e].junctions) == 3:
-            all = []
-            join(exons, exons[e].end, all)
-            if len(all) > len(exons[e].junctions):
-                #print exons[e].chr, exons[e].start, exons[e].end, exons[e].junctions
-                #print 'after grouping:\n', sorted(all)
-                break
-    new_all = {}
-    for j in all:
-        if j[0] not in new_all:
-            new_all[j[0]] = j[-1]
-        else:
-            if j[-1] != new_all[j[0]]:
-                new_all[j[0]] = j[-1]
-
-    chromStart = sorted(new_all.keys())[0]
-    blockStarts = [str(j - chromStart) for j in sorted(new_all)]
-    blockSizes = [str(new_all[j] - j) for j in sorted(new_all)]
-    blockEnds = [str(new_all[j] - chromStart) for j in sorted(new_all)]
-    chromEnd = int([str(new_all[j]) for j in sorted(new_all)][-1])
-    blockCount = len(new_all)
-    print '%s\t%d\t%d\ttest\t1000\t+\t%d\t%d\t255,0,0\t%d\t%s\t%s' % (exons[e].chr, chromStart, chromEnd, chromStart, chromEnd, blockCount, ','.join(blockSizes), ','.join(blockStarts))
+    print >> sys.stderr, 'total exons = %d' % len(exons)
+    exon_clusters = cluster(exons)
+    printout_PSL(exons, exon_clusters)
