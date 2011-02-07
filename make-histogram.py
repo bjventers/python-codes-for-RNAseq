@@ -1,7 +1,7 @@
 import pysam
 import sys
 
-'''Input file is BAM file with BAM index file'''
+'''Input file is a BAM file with an index file'''
 
 if len(sys.argv) > 3:
     chr = sys.argv[2]
