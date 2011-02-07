@@ -17,6 +17,25 @@ class Exon(object):
         self.cluster = []
         self.connected_exons = [(sorted(start)[0], end)]
 
+class BED(object):
+    def __init__(self, **kwargs):
+        self.attrib = kwargs
+        self.attrib['blockSizes'] = [int(i) for i in self.attrib['blockSizes']]
+        self.attrib['tStarts'] = [int(i) for i in self.attrib['tStarts']]
+
+def parse_bed(fp, comment):
+    attrib = {}
+    for line in fp:
+        if line.startswith(comment): continue
+        rows = line.strip().split()
+        attrib['tName'] = rows[0]
+        attrib['tStarts'] = rows[-1].split(',')[:-1]
+        attrib['blockSizes'] = rows[-2].split(',')[:-1]
+        if len(attrib['tStarts']) == 1:
+            continue
+        aln = BED(**attrib)
+        yield aln
+
 def construct(aln_obj, exons):
     for i in range(len(aln.attrib['tStarts'][:-1])):
         end = aln.attrib['tStarts'][i] + aln.attrib['blockSizes'][i]
@@ -54,9 +73,11 @@ def join(exons, exon_end, grouped, new_cluster, all_connected_exons, add_cluster
 def cluster(exons):
     grouped = []
     exon_clusters = []
+    n = 0
     print >> sys.stderr, 'Clustering ...'
-    for e in sorted(exons):
+    for num,e in enumerate(sorted(exons), start=1):
         if e in grouped: 
+            if num % 1000 == 0: print >> sys.stderr, '...', num
             continue
         else:
             all_connected_exons = []
@@ -76,15 +97,20 @@ def cluster(exons):
                         
                     if (sorted(exons[e].start)[0], exons[e].end) not in exons[c].connected_exons:
                         exons[c].connected_exons.append((sorted(exons[e].start)[0], exons[e].end))
-            if len(exons[e].cluster) == 1: 
-                '''
-                    If the cluster does not contain any exon that shared with other clusters,
-                    add it to a group of unique cluster.
-                '''
-                exon_clusters.append(e)
+
+        if num % 1000 == 0: print >> sys.stderr, '...', num
+
+    for e in sorted(exons):
+        if len(exons[e].cluster) == 1 and len(exons[e].connected_exons) >= 2:
+            '''
+                If the cluster does not contain any exon that shared with other clusters,
+                add it to a group of unique cluster.
+            '''
+            exon_clusters.append(e)
+    print >> sys.stderr, 'total clusters =', len(exon_clusters)
     return exon_clusters
 
-def printout_PSL(exons, exon_clusters):
+def printout_BED(exons, exon_clusters):
     for e in exon_clusters:
         new_junctions = {} 
         connected_exons = sorted(exons[e].connected_exons)
@@ -113,4 +139,4 @@ if __name__ == '__main__':
         construct(aln, exons)
     print >> sys.stderr, 'total exons = %d' % len(exons)
     exon_clusters = cluster(exons)
-    printout_PSL(exons, exon_clusters)
+    printout_BED(exons, exon_clusters)

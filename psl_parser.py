@@ -46,6 +46,7 @@ def read(fobj, comment):
         attrib['blockSizes'] = rows[18].split(',')[:-1]
         attrib['qStarts'] = rows[19].split(',')[:-1]
         attrib['tStarts'] = rows[20].split(',')[:-1]
+        if len(attrib['tStarts']) == 1: continue
         
         pobj = PSL(**attrib) # pobj = PSL object
         yield pobj
