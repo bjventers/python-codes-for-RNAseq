@@ -1,14 +1,19 @@
 #! /usr/local/bin/python
+
 '''
     This script groups all exons related to the same transcript together.
     The output is in PSL format for viewing in UCSC genome browser.
-    The script requires the alignment of transcript assembly from oases program to the referecne genome.
+    The script requires the alignment of transcript assembly from
+    oases program to the referecne genome.
     The input has to be in PSL format from GMAP or BLAT program.
 '''
+
 import psl_parser
 import sys
 
+
 class Exon(object):
+
     def __init__(self, chr, start, end, junctions):
         self.chr = chr
         self.start = start
@@ -17,16 +22,21 @@ class Exon(object):
         self.cluster = []
         self.connected_exons = [(sorted(start)[0], end)]
 
+
 class BED(object):
+
     def __init__(self, **kwargs):
         self.attrib = kwargs
         self.attrib['blockSizes'] = [int(i) for i in self.attrib['blockSizes']]
         self.attrib['tStarts'] = [int(i) for i in self.attrib['tStarts']]
 
+
 def parse_bed(fp, comment):
+
     attrib = {}
     for line in fp:
-        if line.startswith(comment): continue
+        if line.startswith(comment):
+            continue
         rows = line.strip().split()
         attrib['tName'] = rows[0]
         attrib['tStarts'] = rows[-1].split(',')[:-1]
@@ -36,33 +46,51 @@ def parse_bed(fp, comment):
         aln = BED(**attrib)
         yield aln
 
+
 def construct(aln_obj, exons):
+
     for i in range(len(aln.attrib['tStarts'][:-1])):
         end = aln.attrib['tStarts'][i] + aln.attrib['blockSizes'][i]
         start = aln.attrib['tStarts'][i]
         if end in exons and aln.attrib['tName'] == exons[end].chr:
             if start not in exons[end].start:
                 exons[end].start.append(start)
-            junc = (aln.attrib['tStarts'][i+1], aln.attrib['tStarts'][i+1] + aln.attrib['blockSizes'][i+1])
+            junc = (aln.attrib['tStarts'][i + 1], \
+                    aln.attrib['tStarts'][i + 1] + \
+                    aln.attrib['blockSizes'][i + 1])
+
             if junc not in exons[end].junctions:
                 exons[end].junctions.append(junc)
         else:
-             exons[end] = Exon(aln.attrib['tName'], [start], end, [(aln.attrib['tStarts'][i+1], aln.attrib['tStarts'][i+1] + aln.attrib['blockSizes'][i+1])])
+             exons[end] = Exon(aln.attrib['tName'], [start], \
+                                 end, [(aln.attrib['tStarts'][i + 1], \
+                                 aln.attrib['tStarts'][i + 1] + \
+                                 aln.attrib['blockSizes'][i + 1])])
+
     last_exon_start = aln.attrib['tStarts'][-1]
     last_exon_end = last_exon_start + aln.attrib['blockSizes'][-1]
-    if last_exon_end in exons and aln.attrib['tName'] == exons[last_exon_end].chr:
-        if last_exon_start not in exons[last_exon_end].start: exons[last_exon_end].start.append(last_exon_start)
-    else:
-        exons[last_exon_end] = Exon(aln.attrib['tName'], [last_exon_start], last_exon_end, [])
 
-def join(exons, exon_end, grouped, new_cluster, all_connected_exons, add_clusters):
-    grouped.append(exon_end) # grouped exons will not be used to from a new cluster
+    if last_exon_end in exons and \
+        aln.attrib['tName'] == exons[last_exon_end].chr:
+
+        if last_exon_start not in exons[last_exon_end].start:
+            exons[last_exon_end].start.append(last_exon_start)
+    else:
+        exons[last_exon_end] = Exon(aln.attrib['tName'], \
+                                    [last_exon_start], last_exon_end, [])
+
+
+def join(exons, exon_end, grouped, new_cluster, \
+            all_connected_exons, add_clusters):
+
+    grouped.append(exon_end)
+
     if exons[exon_end].junctions:
         for junc in exons[exon_end].junctions:
             start, end = junc
             all_connected_exons.append((sorted(exons[end].start)[0], exons[end].end))
             if new_cluster not in exons[end].cluster:
-                exons[end].cluster.append(new_cluster) # add new cluster to the exon's cluster list.
+                exons[end].cluster.append(new_cluster)  # add new cluster to the exon's cluster list.
             for c in exons[end].cluster:
                 if c not in add_clusters:
                     add_clusters.append(c)
@@ -70,22 +98,25 @@ def join(exons, exon_end, grouped, new_cluster, all_connected_exons, add_cluster
     else:
         return
 
+
 def cluster(exons):
+
     grouped = []
     exon_clusters = []
     n = 0
     print >> sys.stderr, 'Clustering ...'
-    for num,e in enumerate(sorted(exons), start=1):
-        if e in grouped: 
-            if num % 1000 == 0: print >> sys.stderr, '...', num
+    for num, e in enumerate(sorted(exons), start=1):
+        if e in grouped:
+            if num % 1000 == 0:
+                print >> sys.stderr, '...', num
             continue
         else:
             all_connected_exons = []
             add_clusters = []
-            exons[e].cluster.append(e) # the exon belongs to its cluster
+            exons[e].cluster.append(e)  # the exon belongs to its cluster
             join(exons, exons[e].end, grouped, e, all_connected_exons, add_clusters)
             if add_clusters:
-                for start,end in all_connected_exons:
+                for start, end in all_connected_exons:
                     for c in add_clusters:
                         if c not in exons[end].cluster:
                             exons[end].cluster.append(c)
@@ -94,11 +125,12 @@ def cluster(exons):
                 for c in add_clusters:
                     if c not in exons[e].cluster:
                         exons[e].cluster.append(c)
-                        
+
                     if (sorted(exons[e].start)[0], exons[e].end) not in exons[c].connected_exons:
                         exons[c].connected_exons.append((sorted(exons[e].start)[0], exons[e].end))
 
-        if num % 1000 == 0: print >> sys.stderr, '...', num
+        if num % 1000 == 0:
+            print >> sys.stderr, '...', num
 
     for e in sorted(exons):
         if len(exons[e].cluster) == 1 and len(exons[e].connected_exons) >= 2:
@@ -110,9 +142,11 @@ def cluster(exons):
     print >> sys.stderr, 'total clusters =', len(exon_clusters)
     return exon_clusters
 
+
 def printout_BED(exons, exon_clusters):
+
     for e in exon_clusters:
-        new_junctions = {} 
+        new_junctions = {}
         connected_exons = sorted(exons[e].connected_exons)
         if connected_exons:
             for j in connected_exons:
