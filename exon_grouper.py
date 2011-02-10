@@ -6,6 +6,9 @@
     The script requires the alignment of transcript assembly from
     velvet + oases output to the referecne genome.
     The input has to be in PSL/BED format from GMAP, BLAT or this script.
+
+    Author: Likit Preeyanon
+    Email: preeyano@msu.edu
 '''
 
 import psl_parser
