@@ -1,11 +1,21 @@
+'''
+    This script compares the junctions between two tophat output files.
+    fp1 and fp2 are the junction files.
+    snp1 and snp2 are the SNP data in pileup format. (See samtools pileup format).
+
+    Author: Likit Preeyanon
+    Email: preeyano@msu.edu
+'''
 import sys
 
 fp1 = sys.argv[1]
 fp2 = sys.argv[2]
 snp1 = sys.argv[3]
 snp2 = sys.argv[4]
+
 s1 = {}
 s2 = {}
+
 for line in open(snp1):
     chr, pos, ref, geno, cov = line.strip().split()
     pos = int(pos)
