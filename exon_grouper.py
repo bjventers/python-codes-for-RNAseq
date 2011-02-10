@@ -2,10 +2,10 @@
 
 '''
     This script groups all exons related to the same transcript together.
-    The output is in PSL format for viewing in UCSC genome browser.
+    The output is in BED format for viewing in UCSC genome browser.
     The script requires the alignment of transcript assembly from
-    oases program to the referecne genome.
-    The input has to be in PSL format from GMAP or BLAT program.
+    velvet + oases output to the referecne genome.
+    The input has to be in PSL/BED format from GMAP, BLAT or this script.
 '''
 
 import psl_parser
