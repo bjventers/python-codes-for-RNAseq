@@ -49,7 +49,6 @@ def parse_bed(fp, comment):
         aln = BED(**attrib)
         yield aln
 
-
 def construct(aln_obj, exons):
 
     for i in range(len(aln.attrib['tStarts'][:-1])):
@@ -85,6 +84,20 @@ def construct(aln_obj, exons):
 
 def join(exons, exon_end, grouped, new_cluster, \
             all_connected_exons, add_clusters):
+    '''
+        This function walks through all exons connected to the starting
+        exon.
+        Parameters:
+            exons: dictionary containing Exon object.
+            exon_end: key(end) of the starting exon.
+            grouped: a list containing exons that already clustered.
+            new_cluster: a key(end) of a starting exon to be used as a
+            cluster name.
+            all_connected_exons: a list to be added all exons connected to
+            the starting exon.
+            add_clusters: a list to be added all clusters that each exon
+            belongs to. 
+    '''
 
     grouped.append(exon_end)
 
@@ -114,10 +127,30 @@ def cluster(exons):
                 print >> sys.stderr, '...', num
             continue
         else:
-            all_connected_exons = []
+            '''
+                All exons that are connected to this exon are saved in
+                all_connected_exons.
+            '''
+            all_connected_exons = []  
+
+            '''
+                All connected exons will be clustered into the cluster that
+                this exon belongs to.
+                Note that each exon at least belong to its own cluster.
+                All clusters that each exon belongs to can be looked up in
+                cluster attribute of Exon object. 
+            '''
+            exons[e].cluster.append(e)
             add_clusters = []
-            exons[e].cluster.append(e)  # the exon belongs to its cluster
+
+            '''
+                join() walks through all exons that connected together
+                and add them in all_connected_exons list.
+                Also, all clusters that found in cluster attribute of each
+                connected exon will be added to add_clusters list.
+            '''
             join(exons, exons[e].end, grouped, e, all_connected_exons, add_clusters)
+
             if add_clusters:
                 for start, end in all_connected_exons:
                     for c in add_clusters:
@@ -137,10 +170,6 @@ def cluster(exons):
 
     for e in sorted(exons):
         if len(exons[e].cluster) == 1 and len(exons[e].connected_exons) >= 2:
-            '''
-                If the cluster does not contain any exon that shared with other clusters,
-                add it to a group of unique cluster.
-            '''
             exon_clusters.append(e)
     print >> sys.stderr, 'total clusters =', len(exon_clusters)
     return exon_clusters
