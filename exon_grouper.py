@@ -7,6 +7,8 @@
     velvet + oases output to the referecne genome.
     The input has to be in PSL/BED format from GMAP, BLAT or this script.
 
+    Usage: python exon_grouper.py transcripts.psl > transcripts.grouped.bed
+
     Author: Likit Preeyanon
     Email: preeyano@msu.edu
 '''
