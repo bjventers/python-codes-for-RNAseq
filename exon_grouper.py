@@ -174,7 +174,6 @@ def cluster(exons):
     print >> sys.stderr, 'total clusters =', len(exon_clusters)
     return exon_clusters
 
-
 def printout_BED(exons, exon_clusters):
 
     for e in exon_clusters:
@@ -189,14 +188,46 @@ def printout_BED(exons, exon_clusters):
                         new_junctions[j[0]] = j[-1]
         if len(new_junctions) > 1:
             chromStart = connected_exons[0][0]
-            blockStarts = [str(j - chromStart) for j in sorted(new_junctions)]
-            #blockStarts.insert(0,'0')
-            blockSizes = [str(new_junctions[j] - j) for j in sorted(new_junctions)]
-            #blockSizes.insert(0,str(exons[e].end-chromStart))
-            blockEnds = [int(new_junctions[j]) for j in sorted(new_junctions)]
-            chromEnd = blockEnds[-1]
-            blockCount = len(new_junctions)
-            print >> sys.stdout, '%s\t%d\t%d\ttest\t1000\t+\t%d\t%d\t0,0,255\t%d\t%s\t%s' % (exons[e].chr, chromStart, chromEnd, chromStart, chromEnd, blockCount, ','.join(blockSizes), ','.join(blockStarts))
+            blockStarts = [j - chromStart for j in sorted(new_junctions)]
+            blockSizes = [new_junctions[j] - j for j in sorted(new_junctions)]
+            #blockEnds = [int(new_junctions[j]) for j in sorted(new_junctions)]
+
+            new_blockStarts = [blockStarts[0]]  #new blockStarts
+            new_blockSizes = []  #new blockSizes
+            cum_size = 0  #cumulative size
+
+            i = 0
+            while i < len(blockStarts):
+                current_size = blockStarts[i] + blockSizes[i]
+                cum_size += blockSizes[i]
+                #print '-->', blockStarts[i], current_size, cum_size
+                try:
+                    if blockStarts[i+1] < current_size:
+                        cum_size -= blockStarts[i+1] - blockStarts[i]
+                        i += 1
+                    if blockStarts[i+1] == current_size:
+                        i += 1
+                    else:
+                        new_blockSizes.append(cum_size)
+                        i += 1
+                        new_blockStarts.append(blockStarts[i])
+                        cum_size = 0
+                except IndexError:
+                    if blockStarts[i] < blockStarts[i-1] + blockSizes[i-1]:
+                        cum_size = (blockSizes[i] + blockSizes[i-1]) - (blockStarts[i] - blockStarts[i-1]) 
+                        #print cum_size, blockSizes[i], blockSizes[i-1]
+                        new_blockSizes.append(cum_size)
+                    elif blockStarts[i] == blockStarts[i-1] + blockSizes[i-1]:
+                        cum_size = blockSizes[i] + blockSizes[i-1]
+                        new_blockSizes.append(cum_size)
+                    else:
+                        new_blockSizes.append(blockSizes[i])
+                    break
+            chromEnd = new_blockStarts[-1] + new_blockSizes[-1] + chromStart
+            new_blockStarts = [str(i) for i in new_blockStarts]
+            new_blockSizes = [str(i) for i in new_blockSizes]
+            blockCount = len(new_blockStarts)
+            print >> sys.stdout, '%s\t%d\t%d\ttest\t1000\t+\t%d\t%d\t0,0,255\t%d\t%s\t%s' % (exons[e].chr, chromStart, chromEnd, chromStart, chromEnd, blockCount, ','.join(new_blockSizes), ','.join(new_blockStarts))
 
 if __name__ == '__main__':
     print >> sys.stderr, 'Constructing exons ...'
