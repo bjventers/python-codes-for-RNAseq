@@ -27,30 +27,6 @@ class Exon(object):
         self.cluster = []
         self.connected_exons = [(sorted(start)[0], end)]
 
-
-class BED(object):
-
-    def __init__(self, **kwargs):
-        self.attrib = kwargs
-        self.attrib['blockSizes'] = [int(i) for i in self.attrib['blockSizes']]
-        self.attrib['tStarts'] = [int(i) for i in self.attrib['tStarts']]
-
-
-def parse_bed(fp, comment):
-
-    attrib = {}
-    for line in fp:
-        if line.startswith(comment):
-            continue
-        rows = line.strip().split()
-        attrib['tName'] = rows[0]
-        attrib['tStarts'] = rows[-1].split(',')[:-1]
-        attrib['blockSizes'] = rows[-2].split(',')[:-1]
-        if len(attrib['tStarts']) == 1:
-            continue
-        aln = BED(**attrib)
-        yield aln
-
 def construct(aln_obj, exons):
 
     for i in range(len(aln.attrib['tStarts'][:-1])):
@@ -123,7 +99,7 @@ def cluster(exons):
     exon_clusters = []
     n = 0
     print >> sys.stderr, 'Clustering ...'
-    for num, e in enumerate(sorted(exons), start=1):
+    for num, e in enumerate(sorted(exons)):
         if e in grouped:
             if num % 1000 == 0:
                 print >> sys.stderr, '...', num
@@ -177,6 +153,7 @@ def cluster(exons):
     return exon_clusters
 
 def printout_BED(exons, exon_clusters):
+    transcript_no = 0
 
     for e in exon_clusters:
         new_junctions = {}
@@ -229,7 +206,8 @@ def printout_BED(exons, exon_clusters):
             new_blockStarts = [str(i) for i in new_blockStarts]
             new_blockSizes = [str(i) for i in new_blockSizes]
             blockCount = len(new_blockStarts)
-            print >> sys.stdout, '%s\t%d\t%d\ttest\t1000\t+\t%d\t%d\t0,0,255\t%d\t%s\t%s' % (exons[e].chr, chromStart, chromEnd, chromStart, chromEnd, blockCount, ','.join(new_blockSizes), ','.join(new_blockStarts))
+            transcript_no += 1
+            print >> sys.stdout, '%s\t%d\t%d\ttranscript_%d\t1000\t+\t%d\t%d\t0,0,255\t%d\t%s\t%s' % (exons[e].chr, chromStart, chromEnd, transcript_no, chromStart, chromEnd, blockCount, ','.join(new_blockSizes), ','.join(new_blockStarts))
 
 if __name__ == '__main__':
     print >> sys.stderr, 'Constructing exons ...'
