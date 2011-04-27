@@ -39,17 +39,13 @@ def construct(aln_obj, exons):
             junc_start = aln.attrib['tStarts'][i+1]
             junc_end = aln.attrib['tStarts'][i+1] + aln.attrib['blockSizes'][i+1]
 
-            if junc_start in exons[end].junctions:
-                if junc_end > exons[end].junctions[junc_start]:
-                    exons[end].junctions[junc_start] = junc_end
+            if (junc_start, junc_end) not in exons[end].junctions:
+                exons[end].junctions.append((junc_start, junc_end))
 
-            if junc_start not in exons[end].junctions:
-                exons[end].junctions[junc_start] = junc_end
         else:
             junc_start = aln.attrib['tStarts'][i+1]
             junc_end = aln.attrib['tStarts'][i+1] + aln.attrib['blockSizes'][i+1]
-            junc = {}
-            junc[junc_start] = junc_end
+            junc = [(junc_start, junc_end)]
             exons[end] = Exon(aln.attrib['tName'], start, end, junc)
 
     last_exon_start = aln.attrib['tStarts'][-1]
@@ -60,7 +56,7 @@ def construct(aln_obj, exons):
             exons[last_exon_end].start = last_exon_start
     else:
         exons[last_exon_end] = Exon(aln.attrib['tName'], \
-                                    last_exon_start, last_exon_end, {})
+                                    last_exon_start, last_exon_end, [])
 
 def join(exons, exon_end, grouped, new_cluster, \
             all_connected_exons, add_clusters):
@@ -83,7 +79,7 @@ def join(exons, exon_end, grouped, new_cluster, \
         grouped.append(exon_end)
 
     if exons[exon_end].junctions:
-        for start, end in exons[exon_end].junctions.iteritems():
+        for start, end in exons[exon_end].junctions:
             all_connected_exons.append((exons[end].start, exons[end].end))
             if new_cluster not in exons[end].cluster:
                 exons[end].cluster.append(new_cluster)  # add new cluster to the exon's cluster list.
