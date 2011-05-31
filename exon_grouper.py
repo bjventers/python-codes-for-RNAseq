@@ -1,13 +1,14 @@
 #! /usr/local/bin/python
 
 '''
-    This script groups all exons related to the same transcript together.
-    The output is in BED format for viewing in UCSC genome browser.
+    This script groups all exons from the same transcript together.
+    The output is in BED format which can be visualized in UCSC genome browser.
     The script requires the alignment of transcript assembly from
     velvet + oases output to the referecne genome.
-    The input has to be in PSL/BED format from GMAP, BLAT or this script.
+    The input has to be in PSL format from GMAP, BLAT or this script.
 
-    Usage: python exon_grouper.py transcripts.psl > transcripts.grouped.bed
+    Usage: python exon_grouper.py [transcripts.psl]
+    The output is written in a standard output.
 
     Author: Likit Preeyanon
     Email: preeyano@msu.edu
@@ -19,8 +20,8 @@ import time
 
 class Exon(object):
 
-    def __init__(self, chr, start, end, junctions):
-        self.chr = chr
+    def __init__(self, ref, start, end, junctions):
+        self.ref = ref 
         self.start = start
         self.end = end
         self.junctions = junctions
@@ -32,7 +33,7 @@ def construct(aln_obj, exons):
         end = aln.attrib['tStarts'][i] + aln.attrib['blockSizes'][i]
         start = aln.attrib['tStarts'][i]
 
-        if end in exons and aln.attrib['tName'] == exons[end].chr:
+        if end in exons and aln.attrib['tName'] == exons[end].ref:
 
             if start < exons[end].start: exons[end].start = start
 
@@ -51,7 +52,8 @@ def construct(aln_obj, exons):
     last_exon_start = aln.attrib['tStarts'][-1]
     last_exon_end = last_exon_start + aln.attrib['blockSizes'][-1]
 
-    if last_exon_end in exons and aln.attrib['tName'] == exons[last_exon_end].chr:
+    if last_exon_end in exons and aln.attrib['tName'] == \
+        exons[last_exon_end].ref:
         if last_exon_start < exons[last_exon_end].start:
             exons[last_exon_end].start = last_exon_start
     else:
