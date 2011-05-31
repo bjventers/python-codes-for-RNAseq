@@ -17,6 +17,7 @@
 import psl_parser
 import sys
 import time
+import csv
 
 class Exon(object):
 
@@ -158,6 +159,10 @@ def cluster(exons):
 
 def printout_BED(exons, exon_clusters):
 
+    transcriptNumber = 0
+
+    writer = csv.writer(sys.stdout, dialect='excel-tab')
+
     for e in exon_clusters:
         new_junctions = {}
         connected_exons = sorted(exons[e].connected_exons)
@@ -170,6 +175,7 @@ def printout_BED(exons, exon_clusters):
                         new_junctions[start] = end
 
         if new_junctions:
+            transcriptNumber += 1
             chromStart = connected_exons[0][0]
             blockStarts = [j - chromStart for j in sorted(new_junctions)]
             blockSizes = [new_junctions[j] - j for j in sorted(new_junctions)]
@@ -179,24 +185,38 @@ def printout_BED(exons, exon_clusters):
             blockCount = len(blockStarts)
             new_blockStarts = [str(i) for i in blockStarts]
             new_blockSizes = [str(i) for i in blockSizes]
-
-            print >> sys.stdout,'%s\t%d\t%d\ttest\t1000\t+\t%d\t%d\t0, \
-                                    0,255\t%d\t%s\t%s' % (exons[e].ref, 
-                                                            chromStart,
-                                                            chromEnd, 
-                                                            chromStart, 
-                                                            chromEnd,
-                                                            blockCount,
-                                                            ','.join(new_blockSizes),
-                                                            ','.join(new_blockStarts))
+            chrom = exons[e].ref
+            name="%s_%d" % (chrom, transcriptNumber)
+            strand = "+"
+            score=1000
+            itemRgb="0,0,0"
+            writer.writerow((chrom,
+                            chromStart,
+                            chromEnd, 
+                            name,
+                            score,
+                            strand,
+                            chromStart, 
+                            chromEnd,
+                            itemRgb,
+                            blockCount,
+                            ','.join(new_blockSizes),
+                            ','.join(new_blockStarts)))
 
 if __name__ == '__main__':
+
     print >> sys.stderr, 'Constructing exons ...'
+
     exons = {}
+
     for aln in psl_parser.read(open(sys.argv[1]), 'track'):
         construct(aln, exons)
+
     print >> sys.stderr, 'total exons = %d' % len(exons)
+
     multiple_junctions = [exon for exon in exons.itervalues() if len(exon.junctions) > 1]
+
     print >> sys.stderr, 'total multiple junctions', len(multiple_junctions)
+
     exon_clusters = cluster(exons)
     printout_BED(exons, exon_clusters)
