@@ -180,7 +180,15 @@ def printout_BED(exons, exon_clusters):
             new_blockStarts = [str(i) for i in blockStarts]
             new_blockSizes = [str(i) for i in blockSizes]
 
-            print >> sys.stdout, '%s\t%d\t%d\ttest\t1000\t+\t%d\t%d\t0,0,255\t%d\t%s\t%s' % (exons[e].chr, chromStart, chromEnd, chromStart, chromEnd, blockCount, ','.join(new_blockSizes), ','.join(new_blockStarts))
+            print >> sys.stdout,'%s\t%d\t%d\ttest\t1000\t+\t%d\t%d\t0, \
+                                    0,255\t%d\t%s\t%s' % (exons[e].ref, 
+                                                            chromStart,
+                                                            chromEnd, 
+                                                            chromStart, 
+                                                            chromEnd,
+                                                            blockCount,
+                                                            ','.join(new_blockSizes),
+                                                            ','.join(new_blockStarts))
 
 if __name__ == '__main__':
     print >> sys.stderr, 'Constructing exons ...'
