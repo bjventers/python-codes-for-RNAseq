@@ -157,28 +157,28 @@ def cluster(exons):
     print >> sys.stderr, 'total clusters =', len(exon_clusters)
     return exon_clusters
 
-def printout_BED(exons, exon_clusters):
+def printBed(exons, exonClusters):
 
     transcriptNumber = 0
 
     writer = csv.writer(sys.stdout, dialect='excel-tab')
 
-    for e in exon_clusters:
-        new_junctions = {}
-        connected_exons = sorted(exons[e].connected_exons)
-        if connected_exons:
-            for start, end in connected_exons:
-                if start not in new_junctions:
-                    new_junctions[start] = end
+    for e in exonClusters:
+        newJunctions = {}
+        connectedExons = sorted(exons[e].connected_exons)
+        if connectedExons:
+            for start, end in connectedExons:
+                if start not in newJunctions:
+                    newJunctions[start] = end
                 else:
-                    if end > new_junctions[start]:
-                        new_junctions[start] = end
+                    if end > newJunctions[start]:
+                        newJunctions[start] = end
 
-        if new_junctions:
+        if newJunctions:
             transcriptNumber += 1
-            chromStart = connected_exons[0][0]
-            blockStarts = [j - chromStart for j in sorted(new_junctions)]
-            blockSizes = [new_junctions[j] - j for j in sorted(new_junctions)]
+            chromStart = connectedExons[0][0]
+            blockStarts = [j - chromStart for j in sorted(newJunctions)]
+            blockSizes = [newJunctions[j] - j for j in sorted(newJunctions)]
             #blockEnds = [int(new_junctions[j]) for j in sorted(new_junctions)]
 
             chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
@@ -219,4 +219,4 @@ if __name__ == '__main__':
     print >> sys.stderr, 'total multiple junctions', len(multiple_junctions)
 
     exon_clusters = cluster(exons)
-    printout_BED(exons, exon_clusters)
+    printBed(exons, exon_clusters)
