@@ -29,37 +29,41 @@ class Exon(object):
         self.cluster = []
         self.connectedExons = [(start, end)]
 
-def construct(alnObj, exons):
-    for i in range(len(aln.attrib['tStarts'][:-1])):
-        end = aln.attrib['tStarts'][i] + aln.attrib['blockSizes'][i]
-        start = aln.attrib['tStarts'][i]
+def construct(tName, tStarts, blockSizes, exons):
+    '''
+        Constructs a dictionary containing all exon objects.
+    '''
 
-        if end in exons and aln.attrib['tName'] == exons[end].ref:
+    for i in range(len(tStarts[:-1])):
+        end = tStarts[i] + blockSizes[i]
+        start = tStarts[i]
+
+        if end in exons and tName == exons[end].ref:
 
             if start < exons[end].start: exons[end].start = start
 
-            juncStart = aln.attrib['tStarts'][i+1]
-            juncEnd = aln.attrib['tStarts'][i+1] + aln.attrib['blockSizes'][i+1]
+            juncStart = tStarts[i+1]
+            juncEnd = tStarts[i+1] + blockSizes[i+1]
 
             if (juncStart, juncEnd) not in exons[end].junctions:
                 exons[end].junctions.append((juncStart, juncEnd))
 
         else:
-            juncStart = aln.attrib['tStarts'][i+1]
-            juncEnd = aln.attrib['tStarts'][i+1] + aln.attrib['blockSizes'][i+1]
+            juncStart = tStarts[i+1]
+            juncEnd = tStarts[i+1] + blockSizes[i+1]
             junc = [(juncStart, juncEnd)]
-            exons[end] = Exon(aln.attrib['tName'], start, end, junc)
+            exons[end] = Exon(tName, start, end, junc)
 
-    lastExonStart = aln.attrib['tStarts'][-1]
-    lastExonEnd = lastExonStart + aln.attrib['blockSizes'][-1]
+    lastExonStart = tStarts[-1]
+    lastExonEnd = lastExonStart + blockSizes[-1]
 
-    if lastExonEnd in exons and aln.attrib['tName'] == \
+    if lastExonEnd in exons and tName == \
         exons[lastExonEnd].ref:
         if lastExonStart < exons[lastExonEnd].start:
             exons[lastExonEnd].start = lastExonStart
     else:
-        exons[lastExonEnd] = Exon(aln.attrib['tName'], \
-                                    lastExonStart, lastExonEnd, [])
+        exons[lastExonEnd] = Exon(tName, \
+                            lastExonStart, lastExonEnd, [])
 
 def join(exons, exonEnd, grouped, newCluster, \
             allConnectedExons, addClusters):
@@ -155,6 +159,7 @@ def cluster(exons):
         if len(exons[e].cluster) == 1 and len(exons[e].connectedExons) >= 2:
             exonClusters.append(e)
     print >> sys.stderr, 'total clusters =', len(exonClusters)
+    assert len(exonClusters) == 4
     return exonClusters
 
 def printBed(exons, exonClusters):
@@ -209,8 +214,11 @@ if __name__ == '__main__':
 
     exons = {}
 
-    for aln in psl_parser.read(open(sys.argv[1]), 'track'):
-        construct(aln, exons)
+    for alnObj in psl_parser.read(open(sys.argv[1]), 'track'):
+        tStarts = alnObj.attrib['tStarts']
+        blockSizes = alnObj.attrib['blockSizes']
+        tName = alnObj.attrib['tName']
+        construct(tName, tStarts, blockSizes, exons)
 
     print >> sys.stderr, 'total exons = %d' % len(exons)
 
