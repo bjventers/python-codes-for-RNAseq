@@ -21,8 +21,8 @@ import csv
 
 class Exon(object):
 
-    def __init__(self, ref, start, end, junctions):
-        self.ref = ref 
+    def __init__(self, reference, start, end, junctions):
+        self.reference = reference 
         self.start = start
         self.end = end
         self.junctions = junctions
@@ -38,7 +38,7 @@ def construct(tName, tStarts, blockSizes, exons):
         end = tStarts[i] + blockSizes[i]
         start = tStarts[i]
 
-        if end in exons and tName == exons[end].ref:
+        if end in exons and tName == exons[end].reference:
 
             if start < exons[end].start: exons[end].start = start
 
@@ -58,14 +58,14 @@ def construct(tName, tStarts, blockSizes, exons):
     lastExonEnd = lastExonStart + blockSizes[-1]
 
     if lastExonEnd in exons and tName == \
-        exons[lastExonEnd].ref:
+        exons[lastExonEnd].reference:
         if lastExonStart < exons[lastExonEnd].start:
             exons[lastExonEnd].start = lastExonStart
     else:
         exons[lastExonEnd] = Exon(tName, \
                             lastExonStart, lastExonEnd, [])
 
-def join(exons, exonEnd, grouped, newCluster, \
+def join(exons, exonEnd, groupedExons, newCluster, \
             allConnectedExons, addClusters):
     '''
         This function walks through all exons connected to the starting
@@ -73,7 +73,7 @@ def join(exons, exonEnd, grouped, newCluster, \
         Parameters:
             exons: dictionary containing Exon object.
             exonEnd: key(end) of the starting exon.
-            grouped: a list containing exons that already clustered.
+            groupedExons: a list containing exons that already clustered.
             newCluster: a key(end) of a starting exon to be used as a
             cluster name.
             allConnectedExons: a list to be added all exons connected to
@@ -82,8 +82,8 @@ def join(exons, exonEnd, grouped, newCluster, \
             belongs to. 
     '''
 
-    if exonEnd not in grouped:
-        grouped.append(exonEnd)
+    if exonEnd not in groupedExons:
+        groupedExons.append(exonEnd)
 
     if exons[exonEnd].junctions:
         for start, end in exons[exonEnd].junctions:
@@ -93,19 +93,32 @@ def join(exons, exonEnd, grouped, newCluster, \
             for c in exons[end].cluster:
                 if c not in addClusters:
                     addClusters.append(c)
-            join(exons, end, grouped, newCluster, allConnectedExons, addClusters)
+            join(exons, end, groupedExons, newCluster, allConnectedExons, addClusters)
     else:
         return
 
 def cluster(exons):
+    '''
+        Clusters exons from the same genes, isoforms together.
+    '''
 
-    grouped = []
+    allGroupedExons = {}
     exonClusters = []
+    clusterReferences = set()
     n = 0
     now = time.time()
     print >> sys.stderr, 'Clustering ...'
     for num, e in enumerate(sorted(exons)):
-        if e in grouped:
+        reference = exons[e].reference
+        exonEnd = exons[e].end
+
+        try:
+            groupedExons = allGroupedExons[reference]
+        except KeyError:
+            allGroupedExons[reference] = [exonEnd]
+            continue
+
+        if e in groupedExons:
             if num % 1000 == 0:
                 print >> sys.stderr, '...', num,
                 print >> sys.stderr, time.time() - now, len(grouped)
@@ -134,8 +147,7 @@ def cluster(exons):
                 Also, all clusters that found in cluster attribute of each
                 connected exon will be added to newClusters list.
             '''
-            join(exons, exons[e].end, grouped, e, allConnectedExons, newClusters)
-            #print >> sys.stderr, exons[e].start, exons[e].end, allConnectedExons
+            join(exons, exons[e].end, groupedExons, e, allConnectedExons, newClusters)
 
             if newClusters:
                 for start, end in allConnectedExons:
@@ -151,62 +163,67 @@ def cluster(exons):
                     if (exons[e].start, exons[e].end) not in exons[nc].connectedExons:
                         exons[nc].connectedExons.append((exons[e].start, exons[e].end))
 
-        if num % 1000 == 0:
-            print >> sys.stderr, '...', num, time.time() - now, len(grouped)
-            now = time.time()
 
-    for e in sorted(exons):
+    for e in exons:
         if len(exons[e].cluster) == 1 and len(exons[e].connectedExons) >= 2:
             exonClusters.append(e)
+            clusterReferences.add(exons[e].reference)
+
     print >> sys.stderr, 'total clusters =', len(exonClusters)
-    assert len(exonClusters) == 4
-    return exonClusters
+    print >> sys.stderr, 'allGroupedExons = ', allGroupedExons.keys()
+    print >> sys.stderr, 'cluster references = ', clusterReferences
+    assert len(exonClusters) == 9
+    return exonClusters, clusterReferences
 
-def printBed(exons, exonClusters):
-
-    transcriptNumber = 0
+def printBed(exons, exonClusters, clusterReferences):
 
     writer = csv.writer(sys.stdout, dialect='excel-tab')
 
-    for e in exonClusters:
-        newJunctions = {}
-        connectedExons = sorted(exons[e].connectedExons)
-        if connectedExons:
-            for start, end in connectedExons:
-                if start not in newJunctions:
-                    newJunctions[start] = end
-                else:
-                    if end > newJunctions[start]:
-                        newJunctions[start] = end
+    for ref in clusterReferences:
+        transcriptNumber = 0
+        for e in exonClusters:
+            if exons[e].reference == ref:
+                newJunctions = {}
+                connectedExons = sorted(exons[e].connectedExons)
+                if connectedExons:
+                    for start, end in connectedExons:
+                        if start not in newJunctions:
+                            newJunctions[start] = end
+                        else:
+                            if end > newJunctions[start]:
+                                newJunctions[start] = end
 
-        if newJunctions:
-            transcriptNumber += 1
-            chromStart = connectedExons[0][0]
-            blockStarts = [j - chromStart for j in sorted(newJunctions)]
-            blockSizes = [newJunctions[j] - j for j in sorted(newJunctions)]
-            #blockEnds = [int(new_junctions[j]) for j in sorted(new_junctions)]
+                if newJunctions:
+                    transcriptNumber += 1
+                    chromStart = connectedExons[0][0]
+                    blockStarts = [j - chromStart for j in sorted(newJunctions)]
+                    blockSizes = [newJunctions[j] - j for j in sorted(newJunctions)]
+                    #blockEnds = [int(new_junctions[j]) for j in sorted(new_junctions)]
 
-            chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
-            blockCount = len(blockStarts)
-            newBlockStarts = [str(i) for i in blockStarts]
-            newBlockSizes = [str(i) for i in blockSizes]
-            chrom = exons[e].ref
-            name="%s_%d" % (chrom, transcriptNumber)
-            strand = "+"
-            score=1000
-            itemRgb="0,0,0"
-            writer.writerow((chrom,
-                            chromStart,
-                            chromEnd, 
-                            name,
-                            score,
-                            strand,
-                            chromStart, 
-                            chromEnd,
-                            itemRgb,
-                            blockCount,
-                            ','.join(newBlockSizes),
-                            ','.join(newBlockStarts)))
+                    chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
+                    blockCount = len(blockStarts)
+                    newBlockStarts = [str(i) for i in blockStarts]
+                    newBlockSizes = [str(i) for i in blockSizes]
+                    chrom = exons[e].reference
+                    name="%s_%d" % (chrom, transcriptNumber)
+                    strand = "+"
+                    score=1000
+                    itemRgb="0,0,0"
+                    writer.writerow((chrom,
+                                    chromStart,
+                                    chromEnd, 
+                                    name,
+                                    score,
+                                    strand,
+                                    chromStart, 
+                                    chromEnd,
+                                    itemRgb,
+                                    blockCount,
+                                    ','.join(newBlockSizes),
+                                    ','.join(newBlockStarts)))
+
+            else:
+                continue
 
 if __name__ == '__main__':
 
@@ -226,5 +243,5 @@ if __name__ == '__main__':
 
     print >> sys.stderr, 'total multiple junctions', len(multipleJunctions)
 
-    exonClusters = cluster(exons)
-    printBed(exons, exonClusters)
+    exonClusters, clusterReferences = cluster(exons)
+    printBed(exons, exonClusters, clusterReferences)
