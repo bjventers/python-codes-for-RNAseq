@@ -172,7 +172,6 @@ def cluster(exons):
     print >> sys.stderr, 'total clusters =', len(exonClusters)
     print >> sys.stderr, 'allGroupedExons = ', allGroupedExons.keys()
     print >> sys.stderr, 'cluster references = ', clusterReferences
-    assert len(exonClusters) == 9
     return exonClusters, clusterReferences
 
 def printBed(exons, exonClusters, clusterReferences):
