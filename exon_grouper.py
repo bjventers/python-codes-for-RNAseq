@@ -21,49 +21,59 @@ import csv
 
 class Exon(object):
 
-    def __init__(self, reference, start, end, junctions):
+    def __init__(self, reference, start, end, junctions, leftTerminal):
         self.reference = reference 
         self.start = start
         self.end = end
         self.junctions = junctions
         self.cluster = []
         self.connectedExons = [(start, end)]
+        self.leftTerminal = leftTerminal
 
 def construct(tName, tStarts, blockSizes, exons):
     '''
         Constructs a dictionary containing all exon objects.
     '''
 
-    for i in range(len(tStarts[:-1])):
+    for i in range(len(tStarts)-1):
         end = tStarts[i] + blockSizes[i]
         start = tStarts[i]
+        juncStart = tStarts[i+1]
+        juncEnd = tStarts[i+1] + blockSizes[i+1]
 
         if end in exons and tName == exons[end].reference:
+            endExons = exons[end]
 
-            if start < exons[end].start: exons[end].start = start
-
-            juncStart = tStarts[i+1]
-            juncEnd = tStarts[i+1] + blockSizes[i+1]
+            if start < exons[end].start:
+                if exons[end].leftTerminal:
+                    exons[end].start = start
+                else:
+                    pass
+            if start > exons[end].start:
+                if exons[end].leftTerminal:
+                    exons[end].leftTerminal = False
+                    exons[end].start = start
 
             if (juncStart, juncEnd) not in exons[end].junctions:
                 exons[end].junctions.append((juncStart, juncEnd))
 
         else:
-            juncStart = tStarts[i+1]
-            juncEnd = tStarts[i+1] + blockSizes[i+1]
+            if i == 0:
+                leftTerminal = True
+            else:
+                leftTerminal = False
             junc = [(juncStart, juncEnd)]
-            exons[end] = Exon(tName, start, end, junc)
+            exons[end] = Exon(tName, start, end, junc, leftTerminal)
 
     lastExonStart = tStarts[-1]
     lastExonEnd = lastExonStart + blockSizes[-1]
 
-    if lastExonEnd in exons and tName == \
-        exons[lastExonEnd].reference:
+    if lastExonEnd in exons and tName == exons[lastExonEnd].reference:
         if lastExonStart < exons[lastExonEnd].start:
             exons[lastExonEnd].start = lastExonStart
     else:
         exons[lastExonEnd] = Exon(tName, \
-                            lastExonStart, lastExonEnd, [])
+                            lastExonStart, lastExonEnd, [], False)
 
 def join(exons, exonEnd, groupedExons, newCluster, \
             allConnectedExons, addClusters):
