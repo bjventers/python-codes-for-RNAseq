@@ -121,7 +121,7 @@ def cluster(exons):
         if e in groupedExons:
             if num % 1000 == 0:
                 print >> sys.stderr, '...', num,
-                print >> sys.stderr, time.time() - now, len(grouped)
+                print >> sys.stderr, time.time() - now
                 now = time.time()
             continue
         else:
