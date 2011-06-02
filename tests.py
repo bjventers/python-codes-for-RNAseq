@@ -149,3 +149,23 @@ def testClusters6():
     print >> sys.stderr, 'starts = ', starts
     assert sizes == ['100', '50', '120', '200']
     assert starts == ['0', '200', '400', '600']
+
+def testClusters7():
+    exons = {}
+    tStartsSets = [[100, 300, 500, 700],
+                    [150, 300,500,],
+                    ]
+    blockSizesSets = [[100, 50, 120, 200],
+                        [50, 50, 150],
+                        ]
+    tName = 'chr1'
+    for i in range(len(tStartsSets)):
+        eg.construct(tName, tStartsSets[i], blockSizesSets[i], exons)
+
+    exonClusters, clusterReferences = eg.cluster(exons)
+    geneModels = eg.buildGeneModels(exons, exonClusters, clusterReferences)
+    starts, sizes = eg.printBed(geneModels)
+    print >> sys.stderr, 'sizes = ', sizes
+    print >> sys.stderr, 'starts = ', starts
+    assert sizes == ['100', '50', '120', '200']
+    assert starts == ['0', '200', '400', '600']
