@@ -16,7 +16,6 @@
 
 import psl_parser
 import sys
-import time
 import csv
 
 class Exon(object):
@@ -116,7 +115,6 @@ def cluster(exons):
     exonClusters = []
     clusterReferences = set()
     n = 0
-    now = time.time()
     print >> sys.stderr, 'Clustering ...'
     for num, e in enumerate(sorted(exons)):
         reference = exons[e].reference
@@ -131,8 +129,6 @@ def cluster(exons):
         if e in groupedExons:
             if num % 1000 == 0:
                 print >> sys.stderr, '...', num,
-                print >> sys.stderr, time.time() - now
-                now = time.time()
             continue
         else:
             '''
@@ -180,8 +176,6 @@ def cluster(exons):
             clusterReferences.add(exons[e].reference)
 
     print >> sys.stderr, 'total clusters =', len(exonClusters)
-    print >> sys.stderr, 'allGroupedExons = ', allGroupedExons.keys()
-    print >> sys.stderr, 'cluster references = ', clusterReferences
     return exonClusters, clusterReferences
 
 def buildGeneModels(exons, exonClusters, clusterReferences):
@@ -204,7 +198,6 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
                 filteredConnectedExons = [juncs for juncs in
                     connectedExons if exons[juncs[-1]].start == juncs[0]]
 
-                print >> sys.stderr, 'filteredConnectedExons = ', filteredConnectedExons
                 '''
                     Resolve intron retention.
                 '''
@@ -216,18 +209,15 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
                         k += 1
                         continue
 
-                    print >> sys.stderr, ex
                     overlapped = []
                     for j in range(len(filteredConnectedExons)):
                         nextEx = filteredConnectedExons[j]
                         if nextEx == ex or nextEx in excluded:
                             continue
-                        print >> sys.stderr, '\t', nextEx
                         if ex[-1] >= nextEx[-1] and \
                             nextEx[0] >= ex[0]: # if ex longer than nextEx
                             overlapped.append(nextEx)
                             excluded.append(nextEx)
-                            print >> sys.stderr, '\toverlapped = ', overlapped
 
                     if len(overlapped) > 1:
                         x = 0
@@ -280,10 +270,6 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
                         break
                     h += 1
 
-                print >> sys.stderr, 'newConnectedExons = ', \
-                                    newConnectedExons
-                print >> sys.stderr, 'cleanedConExons = ', \
-                                    cleanedConExons
                 geneModels[ref].append(cleanedConExons)
 
     return geneModels
