@@ -242,30 +242,30 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
                 '''
                     Resolve alternative splice sites.
                 '''
-                h = 0
                 newConnectedExons.sort()
+                print >> sys.stderr, 'newConnectedExons = ', \
+                newConnectedExons
                 skippedExons = []
                 cleanedConExons = []
+                h = 0
                 while h < len(newConnectedExons):
-                    try:
-                        exStart, exEnd = newConnectedExons[h]
-                        nextStart, nextEnd = newConnectedExons[h+1]
-                        if (exStart, exEnd) in skippedExons:
-                            h += 1
-                            continue
-                        if exStart == nextStart:
-                            if exEnd < nextEnd and \
-                                exons[exEnd].junctions:
-                                cleanedConExons.append((exStart, exEnd))
-                                skippedExons.append((nextStart, nextEnd))
-                            else:
-                                pass
-                        else:
-                            cleanedConExons.append((exStart, exEnd))
-                    except IndexError:
-                        cleanedConExons.append((exStart, exEnd))
-                        break
+                    exStart, exEnd = newConnectedExons[h]
+                    if (exStart, exEnd) in skippedExons:
+                        h += 1
+                        continue
+                    for a in range(h, len(newConnectedExons)):
+                        try:
+                            nextStart, nextEnd = newConnectedExons[a]
+                            if exStart == nextStart:
+                                if exons[exEnd].junctions:
+                                    skippedExons.append((nextStart, nextEnd))
+                        except:
+                            pass
+                    cleanedConExons.append((exStart, exEnd))
                     h += 1
+
+                print >> sys.stderr, 'cleanedConExons = ', cleanedConExons
+                print >> sys.stderr, '\n'
 
                 geneModels[ref].append(cleanedConExons)
 
@@ -323,10 +323,6 @@ if __name__ == '__main__':
         construct(tName, tStarts, blockSizes, exons)
 
     print >> sys.stderr, 'total exons = %d' % len(exons)
-
-    multipleJunctions = [exon for exon in exons.itervalues() if len(exon.junctions) > 1]
-
-    print >> sys.stderr, 'total multiple junctions', len(multipleJunctions)
 
     print >> sys.stderr, 'Clustering exons ...'
     exonClusters, clusterReferences = cluster(exons)
