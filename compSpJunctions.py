@@ -28,6 +28,14 @@ secondSample = set([])
 parse(sys.argv[1], firstSample)
 parse(sys.argv[2], secondSample)
 
+with open('firstSample.out', 'w') as fp:
+    for j in firstSample:
+        print >> fp, '%s\t%d\t%d' % j
+
+with open('secondSample.out', 'w') as fp:
+    for j in secondSample:
+        print >> fp, '%s\t%d\t%d' % j
+
 with open('Intersection.out', 'w') as fp:
     for j in firstSample.intersection(secondSample):
         print >> fp, '%s\t%d\t%d' % j
