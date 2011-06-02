@@ -280,11 +280,11 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
                         break
                     h += 1
 
-            print >> sys.stderr, 'newConnectedExons = ', \
-                                newConnectedExons
-            print >> sys.stderr, 'cleanedConExons = ', \
-                                cleanedConExons
-            geneModels[ref].append(cleanedConExons)
+                print >> sys.stderr, 'newConnectedExons = ', \
+                                    newConnectedExons
+                print >> sys.stderr, 'cleanedConExons = ', \
+                                    cleanedConExons
+                geneModels[ref].append(cleanedConExons)
 
     return geneModels
 
