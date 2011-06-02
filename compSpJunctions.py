@@ -27,8 +27,15 @@ secondSample = set([])
 
 parse(sys.argv[1], firstSample)
 parse(sys.argv[2], secondSample)
-print >> sys.stderr, firstSample
 
-#newFirstSample = set([(j[0], j[1]+1, j[2]+1) for j in firstSample])
-print >> sys.stderr, 'Assembly junctions supported by ESTs = ', \
-firstSample.intersection(secondSample)
+with open('Intersection.out', 'w') as fp:
+    for j in firstSample.intersection(secondSample):
+        print >> fp, '%s\t%d\t%d' % j
+
+with open('OneDiffTwo.out', 'w') as fp:
+    for j in firstSample.difference(secondSample):
+        print >> fp, '%s\t%d\t%d' % j
+
+with open('TwoDiffOne.out', 'w') as fp:
+    for j in secondSample.difference(firstSample):
+        print >> fp, '%s\t%d\t%d' % j
