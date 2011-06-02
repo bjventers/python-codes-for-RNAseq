@@ -115,7 +115,6 @@ def cluster(exons):
     exonClusters = []
     clusterReferences = set()
     n = 0
-    print >> sys.stderr, 'Clustering ...'
     for num, e in enumerate(sorted(exons)):
         reference = exons[e].reference
         exonEnd = exons[e].end
@@ -127,8 +126,6 @@ def cluster(exons):
             groupedExons = []
 
         if e in groupedExons:
-            if num % 1000 == 0:
-                print >> sys.stderr, '...', num,
             continue
         else:
             '''
@@ -331,6 +328,8 @@ if __name__ == '__main__':
 
     print >> sys.stderr, 'total multiple junctions', len(multipleJunctions)
 
+    print >> sys.stderr, 'Clustering exons ...'
     exonClusters, clusterReferences = cluster(exons)
+    print >> sys.stderr, 'Building gene models ...'
     geneModels = buildGeneModels(exons, exonClusters, clusterReferences)
     sizes, starts = printBed(geneModels)
