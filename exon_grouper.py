@@ -42,21 +42,20 @@ def construct(tName, tStarts, blockSizes, exons):
         juncEnd = tStarts[i+1] + blockSizes[i+1]
 
         if end in exons and tName == exons[end].reference:
-            endExons = exons[end]
 
             if start < exons[end].start:
                 if exons[end].leftTerminal:
                     exons[end].start = start
-                else:
-                    pass
+
             if start > exons[end].start:
-                if exons[end].leftTerminal:
+                if exons[end].leftTerminal and i > 0:
                     exons[end].leftTerminal = False
+                    exons[end].start = start
+                elif not exons[end].leftTerminal and i > 0:
                     exons[end].start = start
 
             if (juncStart, juncEnd) not in exons[end].junctions:
                 exons[end].junctions.append((juncStart, juncEnd))
-
         else:
             if i == 0:
                 leftTerminal = True
@@ -69,8 +68,9 @@ def construct(tName, tStarts, blockSizes, exons):
     lastExonEnd = lastExonStart + blockSizes[-1]
 
     if lastExonEnd in exons and tName == exons[lastExonEnd].reference:
-        if lastExonStart < exons[lastExonEnd].start:
+        if lastExonStart > exons[lastExonEnd].start:
             exons[lastExonEnd].start = lastExonStart
+
     else:
         exons[lastExonEnd] = Exon(tName, \
                             lastExonStart, lastExonEnd, [], False)
@@ -82,9 +82,9 @@ def join(exons, exonEnd, groupedExons, newCluster, \
         exon.
         Parameters:
             exons: dictionary containing Exon object.
-            exonEnd: key(end) of the starting exon.
+            exonEnd: the end of the starting exon.
             groupedExons: a list containing exons that already clustered.
-            newCluster: a key(end) of a starting exon to be used as a
+            newCluster: the end of a starting exon to be used as a
             cluster name.
             allConnectedExons: a list to be added all exons connected to
             the starting exon.
@@ -97,7 +97,7 @@ def join(exons, exonEnd, groupedExons, newCluster, \
 
     if exons[exonEnd].junctions:
         for start, end in exons[exonEnd].junctions:
-            allConnectedExons.append((exons[end].start, exons[end].end))
+            allConnectedExons.append((start, end))
             if newCluster not in exons[end].cluster:
                 exons[end].cluster.append(newCluster)  # add new cluster to the exon's cluster list.
             for c in exons[end].cluster:
@@ -125,8 +125,8 @@ def cluster(exons):
         try:
             groupedExons = allGroupedExons[reference]
         except KeyError:
-            allGroupedExons[reference] = [exonEnd]
-            continue
+            allGroupedExons[reference] = []
+            groupedExons = []
 
         if e in groupedExons:
             if num % 1000 == 0:
@@ -184,55 +184,149 @@ def cluster(exons):
     print >> sys.stderr, 'cluster references = ', clusterReferences
     return exonClusters, clusterReferences
 
-def printBed(exons, exonClusters, clusterReferences):
+def buildGeneModels(exons, exonClusters, clusterReferences):
+
+    '''
+        Eliminate all middle exons that are fragmented.
+    '''
+    geneModels = {}
+    excluded = []
+    for ref in clusterReferences:
+        if ref not in geneModels:
+            geneModels[ref] = []
+        for e in exonClusters:
+            if exons[e].reference == ref:
+                connectedExons = sorted(exons[e].connectedExons)
+
+                '''
+                    Eliminate all junctions that do not exist.
+                '''
+                filteredConnectedExons = [juncs for juncs in
+                    connectedExons if exons[juncs[-1]].start == juncs[0]]
+
+                print >> sys.stderr, 'filteredConnectedExons = ', filteredConnectedExons
+                '''
+                    Resolve intron retention.
+                '''
+                newConnectedExons = []
+                k = 0
+                while k < len(filteredConnectedExons):
+                    ex = filteredConnectedExons[k]
+                    if ex in excluded:
+                        k += 1
+                        continue
+
+                    print >> sys.stderr, ex
+                    overlapped = []
+                    for j in range(len(filteredConnectedExons)):
+                        nextEx = filteredConnectedExons[j]
+                        if nextEx == ex or nextEx in excluded:
+                            continue
+                        print >> sys.stderr, '\t', nextEx
+                        if ex[-1] >= nextEx[-1] and \
+                            nextEx[0] >= ex[0]: # if ex longer than nextEx
+                            overlapped.append(nextEx)
+                            excluded.append(nextEx)
+                            print >> sys.stderr, '\toverlapped = ', overlapped
+
+                    if len(overlapped) > 1:
+                        x = 0
+                        while x < len(overlapped):
+                            ExStart, ExEnd = overlapped[x]
+                            if exons[ExEnd].junctions:
+                                newConnectedExons.append((ExStart,
+                                ExEnd))
+                            else:
+                                try:
+                                    nextExStart, nextExEnd = overlapped[x+1]
+                                    if nextExStart == ExStart:
+                                        pass
+                                    else:
+                                        newConnectedExons.append((ExStart,
+                                        ExEnd))
+                                except IndexError:
+                                    ExEnd = ex[-1]
+                                    newConnectedExons.append((ExStart,
+                                    ExEnd))
+                            x += 1
+                    else:
+                        newConnectedExons.append(ex) # no overlapped found
+                    k += 1
+                '''
+                    Resolve alternative splice sites.
+                '''
+                h = 0
+                newConnectedExons.sort()
+                skippedExons = []
+                cleanedConExons = []
+                while h < len(newConnectedExons):
+                    try:
+                        exStart, exEnd = newConnectedExons[h]
+                        nextStart, nextEnd = newConnectedExons[h+1]
+                        if (exStart, exEnd) in skippedExons:
+                            h += 1
+                            continue
+                        if exStart == nextStart:
+                            if exEnd < nextEnd and \
+                                exons[exEnd].junctions:
+                                cleanedConExons.append((exStart, exEnd))
+                                skippedExons.append((nextStart, nextEnd))
+                            else:
+                                pass
+                        else:
+                            cleanedConExons.append((exStart, exEnd))
+                    except IndexError:
+                        cleanedConExons.append((exStart, exEnd))
+                        break
+                    h += 1
+
+            print >> sys.stderr, 'newConnectedExons = ', \
+                                newConnectedExons
+            print >> sys.stderr, 'cleanedConExons = ', \
+                                cleanedConExons
+            geneModels[ref].append(cleanedConExons)
+
+    return geneModels
+
+def printBed(geneModels):
 
     writer = csv.writer(sys.stdout, dialect='excel-tab')
 
-    for ref in clusterReferences:
+    for ref in geneModels:
         transcriptNumber = 0
-        for e in exonClusters:
-            if exons[e].reference == ref:
-                newJunctions = {}
-                connectedExons = sorted(exons[e].connectedExons)
-                if connectedExons:
-                    for start, end in connectedExons:
-                        if start not in newJunctions:
-                            newJunctions[start] = end
-                        else:
-                            if end > newJunctions[start]:
-                                newJunctions[start] = end
+        for m in geneModels[ref]:
+            model = {}
+            for v in m:
+                model[v[0]] = v[-1]
+            print >> sys.stderr, 'model = ', model
+            transcriptNumber += 1
+            chromStart = sorted(model)[0]
+            blockStarts = [j - chromStart for j in sorted(model)]
+            blockSizes = [model[j] - j for j in sorted(model)]
 
-                if newJunctions:
-                    transcriptNumber += 1
-                    chromStart = connectedExons[0][0]
-                    blockStarts = [j - chromStart for j in sorted(newJunctions)]
-                    blockSizes = [newJunctions[j] - j for j in sorted(newJunctions)]
-                    #blockEnds = [int(new_junctions[j]) for j in sorted(new_junctions)]
+            chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
+            blockCount = len(blockStarts)
+            newBlockStarts = [str(i) for i in blockStarts]
+            newBlockSizes = [str(i) for i in blockSizes]
+            chrom = ref
+            name="%s_%d" % (chrom, transcriptNumber)
+            strand = "+"
+            score=1000
+            itemRgb="0,0,0"
+            writer.writerow((chrom,
+                            chromStart,
+                            chromEnd, 
+                            name,
+                            score,
+                            strand,
+                            chromStart, 
+                            chromEnd,
+                            itemRgb,
+                            blockCount,
+                            ','.join(newBlockSizes),
+                            ','.join(newBlockStarts)))
 
-                    chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
-                    blockCount = len(blockStarts)
-                    newBlockStarts = [str(i) for i in blockStarts]
-                    newBlockSizes = [str(i) for i in blockSizes]
-                    chrom = exons[e].reference
-                    name="%s_%d" % (chrom, transcriptNumber)
-                    strand = "+"
-                    score=1000
-                    itemRgb="0,0,0"
-                    writer.writerow((chrom,
-                                    chromStart,
-                                    chromEnd, 
-                                    name,
-                                    score,
-                                    strand,
-                                    chromStart, 
-                                    chromEnd,
-                                    itemRgb,
-                                    blockCount,
-                                    ','.join(newBlockSizes),
-                                    ','.join(newBlockStarts)))
-
-            else:
-                continue
+    return newBlockStarts, newBlockSizes
 
 if __name__ == '__main__':
 
@@ -253,4 +347,5 @@ if __name__ == '__main__':
     print >> sys.stderr, 'total multiple junctions', len(multipleJunctions)
 
     exonClusters, clusterReferences = cluster(exons)
-    printBed(exons, exonClusters, clusterReferences)
+    geneModels = buildGeneModels(exons, exonClusters, clusterReferences)
+    sizes, starts = printBed(geneModels)
