@@ -284,7 +284,6 @@ def printBed(geneModels):
             model = {}
             for v in m:
                 model[v[0]] = v[-1]
-            print >> sys.stderr, 'model = ', model
             transcriptNumber += 1
             chromStart = sorted(model)[0]
             blockStarts = [j - chromStart for j in sorted(model)]
