@@ -243,7 +243,6 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
                     Resolve alternative splice sites.
                 '''
                 newConnectedExons.sort()
-                print >> sys.stderr, 'newConnectedExons = ', \
                 newConnectedExons
                 skippedExons = []
                 cleanedConExons = []
@@ -263,9 +262,6 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
                             pass
                     cleanedConExons.append((exStart, exEnd))
                     h += 1
-
-                print >> sys.stderr, 'cleanedConExons = ', cleanedConExons
-                print >> sys.stderr, '\n'
 
                 geneModels[ref].append(cleanedConExons)
 
