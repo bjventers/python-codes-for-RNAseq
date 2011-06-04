@@ -179,9 +179,6 @@ def cluster(exons):
 
 def buildGeneModels(exons, exonClusters, clusterReferences):
 
-    '''
-        Eliminate all middle exons that are fragmented.
-    '''
     geneModels = {}
     excluded = []
     for ref in clusterReferences:
@@ -194,11 +191,14 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
                 '''
                     Eliminate all junctions that do not exist.
                 '''
+                '''
                 filteredConnectedExons = [juncs for juncs in
                     connectedExons if exons[juncs[-1]].start == juncs[0]]
+                '''
 
                 '''
                     Resolve intron retention.
+                '''
                 '''
                 newConnectedExons = []
                 k = 0
@@ -242,29 +242,31 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
                         newConnectedExons.append(ex) # no overlapped found
                     k += 1
                 '''
+                '''
                     Resolve alternative splice sites.
                 '''
-                newConnectedExons.sort()
-                newConnectedExons
-                skippedExons = []
-                cleanedConExons = []
-                h = 0
-                while h < len(newConnectedExons):
-                    exStart, exEnd = newConnectedExons[h]
-                    if (exStart, exEnd) in skippedExons:
-                        h += 1
-                        continue
-                    for a in range(h, len(newConnectedExons)):
-                        try:
-                            nextStart, nextEnd = newConnectedExons[a]
-                            if exStart == nextStart:
-                                if exons[exEnd].junctions:
-                                    skippedExons.append((nextStart, nextEnd))
-                        except:
-                            pass
-                    cleanedConExons.append((exStart, exEnd))
-                    h += 1
 
+                newConnectedExons = connectedExons
+                cleanedConExons = []
+                h = 1
+                exStart, exEnd = newConnectedExons[0]
+                while h < len(newConnectedExons):
+                    nextStart, nextEnd = newConnectedExons[h]
+                    if exStart == nextStart:
+                        if exons[nextEnd].junctions:
+                            exStart, exEnd = nextStart, nextEnd
+                        else:
+                            if not exons[exEnd].junctions:
+                                exStart, exEnd = nextStart, nextEnd
+                    else:
+                        if exEnd < nextStart:
+                            cleanedConExons.append((exStart, exEnd))
+                            exStart, exEnd = nextStart, nextEnd 
+                        else:
+                            if exEnd < nextEnd:
+                                exEnd = nextEnd
+                    h += 1
+                cleanedConExons.append((exStart, exEnd))
                 geneModels[ref].append(cleanedConExons)
 
     return geneModels
