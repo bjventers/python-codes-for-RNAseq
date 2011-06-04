@@ -1,9 +1,10 @@
+#! /usr/local/bin/python
+
 '''
     Author: Likit Preeyanon
     Email: preeyano@msu.edu
 '''
 
-#! /usr/local/bin/python
 import pysam
 import sys
 from optparse import OptionParser
