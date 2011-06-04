@@ -272,7 +272,7 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
 
     return geneModels
 
-def getSequenceGeneWise(geneModels, genome):
+def getSequenceExonWise(geneModels, genome):
     for ref in geneModels:
         transcriptNumber = 1
         exonNumber = 1
@@ -291,14 +291,11 @@ def printBed(geneModels):
 
     for ref in geneModels:
         transcriptNumber = 0
-        for m in geneModels[ref]:
-            model = {}
-            for v in m:
-                model[v[0]] = v[-1]
+        for model in geneModels[ref]:
             transcriptNumber += 1
-            chromStart = sorted(model)[0]
-            blockStarts = [j - chromStart for j in sorted(model)]
-            blockSizes = [model[j] - j for j in sorted(model)]
+            chromStart = model[0][0]
+            blockStarts = [j[0] - chromStart for j in model]
+            blockSizes = [j[1] - j[0] for j in model]
 
             chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
             blockCount = len(blockStarts)
