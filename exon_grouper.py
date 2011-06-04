@@ -4,11 +4,13 @@
     This script groups all exons from the same transcript together.
     The output is in BED format which can be visualized in UCSC genome browser.
     The script requires the alignment of transcript assembly from
-    velvet + oases output to the referecne genome.
-    The input has to be in PSL format from GMAP, BLAT or this script.
+    velvet + oases to the referecne genome.
+    The alignment has to be in PSL format from GMAP, BLAT. 
 
     Usage: python exon_grouper.py [transcripts.psl]
     The output is written in a standard output.
+
+    The script is written in Python 2.6.6
 
     Author: Likit Preeyanon
     Email: preeyano@msu.edu
