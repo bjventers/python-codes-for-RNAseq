@@ -54,13 +54,9 @@ for alignedRead in samfile.fetch(sequence, opts.begin, opts.end):
     if not opts.noDuplicate:
         printOutput(alignedRead.qname , alignedRead.seq, alignedRead.qual)
         uniques.add(alignedRead.qname)
-        print opts.noDuplicate
-        break
     else:
         if alignedRead.qname not in uniques:
             uniques.add(alignedRead.qname)
             printOutput(alignedRead.qname , alignedRead.seq, alignedRead.qual)
-            print opts.noDuplicate
-            break
         else:
             pass
