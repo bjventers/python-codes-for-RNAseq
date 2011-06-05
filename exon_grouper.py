@@ -111,14 +111,15 @@ def join(exons, exonEnd, groupedExons, newCluster, \
 
 def cluster(exons):
     '''
-        Clusters exons from the same genes, isoforms together.
+        Clusters exons of the same gene together.
     '''
 
     allGroupedExons = {}
     exonClusters = []
     clusterReferences = set()
-    n = 0
     for num, e in enumerate(sorted(exons)):
+        if num%100==0:
+            print >> sys.stderr, '...', num
         reference = exons[e].reference
         exonEnd = exons[e].end
 
@@ -131,28 +132,11 @@ def cluster(exons):
         if e in groupedExons:
             continue
         else:
-            '''
-                All exons that are connected to this exon are stored in
-                allConnectedExons.
-            '''
             allConnectedExons = []  
 
-            '''
-                All connected exons will be put into the cluster that
-                this exon belongs to.
-                Note that each exon belongs to its own cluster.
-                All clusters that each exon belongs to can be looked up in
-                cluster attribute of Exon object. 
-            '''
             exons[e].cluster.append(e)
             newClusters = []
 
-            '''
-                join() walks through all exons that connected together
-                and add them in allConnectedExons list.
-                Also, all clusters that found in cluster attribute of each
-                connected exon will be added to newClusters list.
-            '''
             join(exons, exons[e].end, groupedExons, e, allConnectedExons, newClusters)
 
             if newClusters:
@@ -285,6 +269,7 @@ def getSequenceExonWise(geneModels, genome):
                 sequtil.write_fasta(op,str(seq), id=exonID)
                 exonNumber += 1
             transcriptNumber += 1
+>>>>>>> 1c998d5bcb368240a68d105519ed963b6afec4e3
         op.close()
 
 def printBed(geneModels):
@@ -293,14 +278,11 @@ def printBed(geneModels):
 
     for ref in geneModels:
         transcriptNumber = 0
-        for m in geneModels[ref]:
-            model = {}
-            for v in m:
-                model[v[0]] = v[-1]
+        for model in geneModels[ref]:
             transcriptNumber += 1
-            chromStart = sorted(model)[0]
-            blockStarts = [j - chromStart for j in sorted(model)]
-            blockSizes = [model[j] - j for j in sorted(model)]
+            chromStart = model[0][0]
+            blockStarts = [j[0] - chromStart for j in model]
+            blockSizes = [j[1] - j[0] for j in model]
 
             chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
             blockCount = len(blockStarts)
@@ -344,6 +326,10 @@ if __name__ == '__main__':
     exonClusters, clusterReferences = cluster(exons)
     print >> sys.stderr, 'Building gene models ...'
     geneModels = buildGeneModels(exons, exonClusters, clusterReferences)
+<<<<<<< HEAD
+    genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
+=======
     genome = seqdb.SequenceFileDB(sys.argv[2])
+>>>>>>> 1c998d5bcb368240a68d105519ed963b6afec4e3
     getSequenceExonWise(geneModels, genome)
     #sizes, starts = printBed(geneModels)
