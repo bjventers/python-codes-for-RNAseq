@@ -19,7 +19,7 @@
 import psl_parser
 import sys
 import csv
-#from pygr import seqdb, sequtil
+from pygr import seqdb, sequtil
 
 class Exon(object):
 
@@ -272,17 +272,19 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
 
     return geneModels
 
-def getSequenceGeneWise(geneModels, genome):
+def getSequenceExonWise(geneModels, genome):
     for ref in geneModels:
         transcriptNumber = 1
         exonNumber = 1
         op = open(ref+'.fasta', 'w')
-        for exon in geneModels[ref]:
-            start, end = exon
-            seq = genome[ref][start:end]
-            exonID = 'exon_%d' % exonNumber
-            sequtil.write_fasta(op, id=exonID)
-            exonNumber += 1
+        for gene in geneModels[ref]:
+            for exon in gene:
+                start, end = exon
+                seq = genome[ref][start:end]
+                exonID = 'gene_%d:exon_%d' % (transcriptNumber,exonNumber)
+                sequtil.write_fasta(op,str(seq), id=exonID)
+                exonNumber += 1
+            transcriptNumber += 1
         op.close()
 
 def printBed(geneModels):
@@ -342,6 +344,6 @@ if __name__ == '__main__':
     exonClusters, clusterReferences = cluster(exons)
     print >> sys.stderr, 'Building gene models ...'
     geneModels = buildGeneModels(exons, exonClusters, clusterReferences)
-    #genome = seqdb.SequenceFileDB(sys.argv[2])
-    #getSequenceExonWise(geneModels)
-    sizes, starts = printBed(geneModels)
+    genome = seqdb.SequenceFileDB(sys.argv[2])
+    getSequenceExonWise(geneModels, genome)
+    #sizes, starts = printBed(geneModels)
