@@ -275,9 +275,9 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
 def getSequenceExonWise(geneModels, genome):
     for ref in geneModels:
         transcriptNumber = 1
-        exonNumber = 1
         op = open(ref+'.fasta', 'w')
         for gene in geneModels[ref]:
+            exonNumber = 1
             for exon in gene:
                 start, end = exon
                 seq = genome[ref][start:end]
