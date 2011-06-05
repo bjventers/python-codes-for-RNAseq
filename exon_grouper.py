@@ -117,8 +117,9 @@ def cluster(exons):
     allGroupedExons = {}
     exonClusters = []
     clusterReferences = set()
-    n = 0
     for num, e in enumerate(sorted(exons)):
+        if num%100==0:
+            print >> sys.stderr, '...', num
         reference = exons[e].reference
         exonEnd = exons[e].end
 
