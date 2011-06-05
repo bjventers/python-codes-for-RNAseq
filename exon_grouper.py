@@ -19,7 +19,7 @@
 import psl_parser
 import sys
 import csv
-#from pygr import seqdb, sequtil
+from pygr import seqdb, sequtil
 
 class Exon(object):
 
@@ -111,7 +111,7 @@ def join(exons, exonEnd, groupedExons, newCluster, \
 
 def cluster(exons):
     '''
-        Clusters exons from the same genes, isoforms together.
+        Clusters exons of the same gene together.
     '''
 
     allGroupedExons = {}
@@ -132,28 +132,11 @@ def cluster(exons):
         if e in groupedExons:
             continue
         else:
-            '''
-                All exons that are connected to this exon are stored in
-                allConnectedExons.
-            '''
             allConnectedExons = []  
 
-            '''
-                All connected exons will be put into the cluster that
-                this exon belongs to.
-                Note that each exon belongs to its own cluster.
-                All clusters that each exon belongs to can be looked up in
-                cluster attribute of Exon object. 
-            '''
             exons[e].cluster.append(e)
             newClusters = []
 
-            '''
-                join() walks through all exons that connected together
-                and add them in allConnectedExons list.
-                Also, all clusters that found in cluster attribute of each
-                connected exon will be added to newClusters list.
-            '''
             join(exons, exons[e].end, groupedExons, e, allConnectedExons, newClusters)
 
             if newClusters:
@@ -275,15 +258,17 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
 
 def getSequenceExonWise(geneModels, genome):
     for ref in geneModels:
-        transcriptNumber = 1
-        exonNumber = 1
+        geneNumber = 1
         op = open(ref+'.fasta', 'w')
-        for exon in geneModels[ref]:
-            start, end = exon
-            seq = genome[ref][start:end]
-            exonID = 'exon_%d' % exonNumber
-            sequtil.write_fasta(op, id=exonID)
-            exonNumber += 1
+        for gene in geneModels[ref]:
+            exonNumber = 1
+            for exon in gene:
+                start, end = exon
+                seq = genome[ref][start:end]
+                exonID = 'gene_%d:exon_%d' % (geneNumber, exonNumber)
+                sequtil.write_fasta(op, str(seq), id=exonID)
+                exonNumber += 1
+            geneNumber += 1
         op.close()
 
 def printBed(geneModels):
@@ -340,6 +325,6 @@ if __name__ == '__main__':
     exonClusters, clusterReferences = cluster(exons)
     print >> sys.stderr, 'Building gene models ...'
     geneModels = buildGeneModels(exons, exonClusters, clusterReferences)
-    #genome = seqdb.SequenceFileDB(sys.argv[2])
-    #getSequenceExonWise(geneModels)
-    sizes, starts = printBed(geneModels)
+    genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
+    getSequenceExonWise(geneModels, genome)
+    #sizes, starts = printBed(geneModels)
