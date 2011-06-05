@@ -261,6 +261,7 @@ def getSequenceExonWise(geneModels, genome):
         geneNumber = 1
         op = open(ref+'.fasta', 'w')
         for gene in geneModels[ref]:
+<<<<<<< HEAD
             exonNumber = 1
             for exon in gene:
                 start, end = exon
@@ -269,6 +270,15 @@ def getSequenceExonWise(geneModels, genome):
                 sequtil.write_fasta(op, str(seq), id=exonID)
                 exonNumber += 1
             geneNumber += 1
+=======
+            for exon in gene:
+                start, end = exon
+                seq = genome[ref][start:end]
+                exonID = 'gene_%d:exon_%d' % (transcriptNumber,exonNumber)
+                sequtil.write_fasta(op,str(seq), id=exonID)
+                exonNumber += 1
+            transcriptNumber += 1
+>>>>>>> 1c998d5bcb368240a68d105519ed963b6afec4e3
         op.close()
 
 def printBed(geneModels):
@@ -325,6 +335,10 @@ if __name__ == '__main__':
     exonClusters, clusterReferences = cluster(exons)
     print >> sys.stderr, 'Building gene models ...'
     geneModels = buildGeneModels(exons, exonClusters, clusterReferences)
+<<<<<<< HEAD
     genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
+=======
+    genome = seqdb.SequenceFileDB(sys.argv[2])
+>>>>>>> 1c998d5bcb368240a68d105519ed963b6afec4e3
     getSequenceExonWise(geneModels, genome)
     #sizes, starts = printBed(geneModels)
