@@ -326,10 +326,6 @@ if __name__ == '__main__':
     exonClusters, clusterReferences = cluster(exons)
     print >> sys.stderr, 'Building gene models ...'
     geneModels = buildGeneModels(exons, exonClusters, clusterReferences)
-<<<<<<< HEAD
     genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
-=======
-    genome = seqdb.SequenceFileDB(sys.argv[2])
->>>>>>> 1c998d5bcb368240a68d105519ed963b6afec4e3
     getSequenceExonWise(geneModels, genome)
     #sizes, starts = printBed(geneModels)
