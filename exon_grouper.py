@@ -269,7 +269,6 @@ def getSequenceExonWise(geneModels, genome):
                 sequtil.write_fasta(op,str(seq), id=exonID)
                 exonNumber += 1
             transcriptNumber += 1
->>>>>>> 1c998d5bcb368240a68d105519ed963b6afec4e3
         op.close()
 
 def printBed(geneModels):
