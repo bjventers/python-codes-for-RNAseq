@@ -29,7 +29,7 @@ class Exon(object):
         self.end = end
         self.junctions = junctions
         self.cluster = []
-        self.connectedExons = [(start, end)]
+        self.connectedExons = [end]
         self.leftTerminal = leftTerminal
 
 def construct(tName, tStarts, blockSizes, exons):
@@ -56,15 +56,14 @@ def construct(tName, tStarts, blockSizes, exons):
                 elif not exons[end].leftTerminal and i > 0:
                     exons[end].start = start
 
-            if (juncStart, juncEnd) not in exons[end].junctions:
-                exons[end].junctions.append((juncStart, juncEnd))
+            exons[end].junctions.add(juncEnd)
         else:
             if i == 0:
                 leftTerminal = True
             else:
                 leftTerminal = False
-            junc = [(juncStart, juncEnd)]
-            exons[end] = Exon(tName, start, end, junc, leftTerminal)
+            junctions = set([juncEnd])
+            exons[end] = Exon(tName, start, end, junctions, leftTerminal)
 
     lastExonStart = tStarts[-1]
     lastExonEnd = lastExonStart + blockSizes[-1]
@@ -98,8 +97,8 @@ def join(exons, exonEnd, groupedExons, newCluster, \
         groupedExons.append(exonEnd)
 
     if exons[exonEnd].junctions:
-        for start, end in exons[exonEnd].junctions:
-            allConnectedExons.append((start, end))
+        for end in exons[exonEnd].junctions:
+            allConnectedExons.append(end)
             if newCluster not in exons[end].cluster:
                 exons[end].cluster.append(newCluster)  # add new cluster to the exon's cluster list.
             for c in exons[end].cluster:
@@ -140,19 +139,18 @@ def cluster(exons):
             join(exons, exons[e].end, groupedExons, e, allConnectedExons, newClusters)
 
             if newClusters:
-                for start, end in allConnectedExons:
+                for end in allConnectedExons:
                     for nc in newClusters:
                         if nc not in exons[end].cluster:
                             exons[end].cluster.append(nc)
-                        if (start, end) not in exons[nc].connectedExons:
-                            exons[nc].connectedExons.append((start, end))
+                        if end not in exons[nc].connectedExons:
+                            exons[nc].connectedExons.append(end)
                 for nc in newClusters:
                     if nc not in exons[e].cluster:
                         exons[e].cluster.append(nc)
 
-                    if (exons[e].start, exons[e].end) not in exons[nc].connectedExons:
-                        exons[nc].connectedExons.append((exons[e].start, exons[e].end))
-
+                    if exons[e].end not in exons[nc].connectedExons:
+                        exons[nc].connectedExons.append(exons[e].end)
 
     for e in exons:
         if len(exons[e].cluster) == 1 and len(exons[e].connectedExons) >= 2:
@@ -234,9 +232,11 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
                 newConnectedExons = connectedExons
                 cleanedConExons = []
                 h = 1
-                exStart, exEnd = newConnectedExons[0]
+                exEnd = newConnectedExons[0]
+                exStart = exons[exEnd].start
                 while h < len(newConnectedExons):
-                    nextStart, nextEnd = newConnectedExons[h]
+                    nextEnd = newConnectedExons[h]
+                    nextStart = exons[nextEnd].start
                     if exStart == nextStart:
                         if exons[nextEnd].junctions:
                             exStart, exEnd = nextStart, nextEnd
@@ -256,6 +256,20 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
 
     return geneModels
 
+def validateExonLength(geneModels):
+    for ref in geneModels:
+        geneNo = 1
+        for gene in geneModels[ref]:
+            geneLength = 0
+            for i in range(len(gene)-1):
+                if i == 0:
+                    continue
+                else:
+                    start, end = gene[i]
+                    geneLength = (end - start)
+            print '%s gene %d length = %d' % (ref, geneNo, geneLength%3)
+            geneNo += 1
+
 def getSequenceExonWise(geneModels, genome):
     for ref in geneModels:
         transcriptNumber = 1
@@ -268,6 +282,32 @@ def getSequenceExonWise(geneModels, genome):
                 exonID = 'gene_%d:exon_%d' % (transcriptNumber,exonNumber)
                 sequtil.write_fasta(op,str(seq), id=exonID)
                 exonNumber += 1
+            transcriptNumber += 1
+        op.close()
+
+def getSequenceExonWise2(geneModels, genome):
+    for ref in geneModels:
+        transcriptNumber = 1
+        op = open(ref+'.fasta', 'w')
+        for gene in geneModels[ref]:
+            exonSeqs = []
+            shortExon = False
+            for exon in gene:
+                start, end = exon
+                seq = genome[ref][start:end]
+                exonSeqs.append(str(seq))
+                if len(seq)<3:
+                    print transcriptNumber, gene
+                    '''
+                    if not shortExon:
+                        shortExon = True
+                    '''
+            '''
+            if shortExon:
+                print >> op, '>gene_%d' % transcriptNumber
+                for seq in exonSeqs:
+                    print >> op, str(seq) 
+            '''
             transcriptNumber += 1
         op.close()
 
@@ -317,14 +357,17 @@ if __name__ == '__main__':
         tStarts = alnObj.attrib['tStarts']
         blockSizes = alnObj.attrib['blockSizes']
         tName = alnObj.attrib['tName']
+        qName = alnObj.attrib['qName']
         construct(tName, tStarts, blockSizes, exons)
 
     print >> sys.stderr, 'total exons = %d' % len(exons)
 
     print >> sys.stderr, 'Clustering exons ...'
     exonClusters, clusterReferences = cluster(exons)
+    print exonClusters
     print >> sys.stderr, 'Building gene models ...'
     geneModels = buildGeneModels(exons, exonClusters, clusterReferences)
-    genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
-    getSequenceExonWise(geneModels, genome)
-    #sizes, starts = printBed(geneModels)
+    #validateExonLength(geneModels)
+    #genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
+    #getSequenceExonWise2(geneModels, genome)
+    sizes, starts = printBed(geneModels)
