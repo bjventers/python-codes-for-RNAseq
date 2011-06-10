@@ -21,144 +21,80 @@ import sys
 import csv
 from pygr import seqdb, sequtil
 
-class Exon(object):
-
-    def __init__(self, reference, start, end, junctions, leftTerminal):
-        self.reference = reference 
-        self.start = start
-        self.end = end
-        self.junctions = junctions
-        self.cluster = []
-        self.connectedExons = [end]
-        self.leftTerminal = leftTerminal
-
-def construct(tName, tStarts, blockSizes, exons):
+def construct(tName, tStarts, blockSizes, exons,
+                clusters, newClusterID, clusterConnections):
     '''
         Constructs a dictionary containing all exon objects.
     '''
+    exonGroup = set([])
+    connection = set([])
 
-    for i in range(len(tStarts)-1):
+    for i in range(len(tStarts)):
         end = tStarts[i] + blockSizes[i]
         start = tStarts[i]
-        juncStart = tStarts[i+1]
-        juncEnd = tStarts[i+1] + blockSizes[i+1]
+        exonGroup.add((tName, start, end))
 
-        if end in exons and tName == exons[end].reference:
-
-            if start < exons[end].start:
-                if exons[end].leftTerminal:
-                    exons[end].start = start
-
-            if start > exons[end].start:
-                if exons[end].leftTerminal and i > 0:
-                    exons[end].leftTerminal = False
-                    exons[end].start = start
-                elif not exons[end].leftTerminal and i > 0:
-                    exons[end].start = start
-
-            exons[end].junctions.add(juncEnd)
-        else:
-            if i == 0:
-                leftTerminal = True
-            else:
-                leftTerminal = False
-            junctions = set([juncEnd])
-            exons[end] = Exon(tName, start, end, junctions, leftTerminal)
-
-    lastExonStart = tStarts[-1]
-    lastExonEnd = lastExonStart + blockSizes[-1]
-
-    if lastExonEnd in exons and tName == exons[lastExonEnd].reference:
-        if lastExonStart > exons[lastExonEnd].start:
-            exons[lastExonEnd].start = lastExonStart
-
-    else:
-        exons[lastExonEnd] = Exon(tName, \
-                            lastExonStart, lastExonEnd, [], False)
-
-def join(exons, exonEnd, groupedExons, newCluster, \
-            allConnectedExons, addClusters):
+    ''' 
+        If at least one exon connects to an existing cluster,
+        add all new exons to that cluster and exons database.
     '''
-        This function walks through all exons connected to the starting
-        exon.
-        Parameters:
-            exons: dictionary containing Exon object.
-            exonEnd: the end of the starting exon.
-            groupedExons: a list containing exons that already clustered.
-            newCluster: the end of a starting exon to be used as a
-            cluster name.
-            allConnectedExons: a list to be added all exons connected to
-            the starting exon.
-            addClusters: a list to be added all clusters that each exon
-            belongs to. 
-    '''
-
-    if exonEnd not in groupedExons:
-        groupedExons.append(exonEnd)
-
-    if exons[exonEnd].junctions:
-        for end in exons[exonEnd].junctions:
-            allConnectedExons.append(end)
-            if newCluster not in exons[end].cluster:
-                exons[end].cluster.append(newCluster)  # add new cluster to the exon's cluster list.
-            for c in exons[end].cluster:
-                if c not in addClusters:
-                    addClusters.append(c)
-            join(exons, end, groupedExons, newCluster, allConnectedExons, addClusters)
-    else:
-        return
-
-def cluster(exons):
-    '''
-        Clusters exons of the same gene together.
-    '''
-
-    allGroupedExons = {}
-    exonClusters = []
-    clusterReferences = set()
-    for num, e in enumerate(sorted(exons)):
-        if num%100==0:
-            print >> sys.stderr, '...', num
-        reference = exons[e].reference
-        exonEnd = exons[e].end
-
+    for tName, start, end in sorted(exonGroup):
+        #print tName, start, end,
         try:
-            groupedExons = allGroupedExons[reference]
+            clusterID = exons[(tName, end)]
         except KeyError:
-            allGroupedExons[reference] = []
-            groupedExons = []
+            pass
 
-        if e in groupedExons:
-            continue
+    for tName, start, end in sorted(exonGroup):
+        try:
+            clusterID = exons[(tName, end)]
+        except KeyError:
+            pass
         else:
-            allConnectedExons = []  
+            connection.add(clusterID)
 
-            exons[e].cluster.append(e)
-            newClusters = []
+    if connection:
+        clusters[clusterID] = clusters[clusterID].union(exonGroup)
+        for tName, start, end in sorted(exonGroup):
+            exons[(tName, end)] = clusterID
+        for c in connection:
+            clusterConnections[c] = clusterConnections[c].union(connection)
+    else:
+        '''
+            If no exons connects to any exon in existing clusters,
+            new cluster will be created for the new group of exons.
+            All new exons are also added to the exons database.
+        '''
+        clusters[(tName, newClusterID)] = exonGroup
+        clusterConnections[(tName, newClusterID)] = set([])
+        for tName, start, end in sorted(exonGroup):
+            try:
+                exons[(tName, end)] = (tName, newClusterID)
+            except:
+                raise KeyError
+        newClusterID += 1
+    #print '='*40
 
-            join(exons, exons[e].end, groupedExons, e, allConnectedExons, newClusters)
+    return newClusterID
 
-            if newClusters:
-                for end in allConnectedExons:
-                    for nc in newClusters:
-                        if nc not in exons[end].cluster:
-                            exons[end].cluster.append(nc)
-                        if end not in exons[nc].connectedExons:
-                            exons[nc].connectedExons.append(end)
-                for nc in newClusters:
-                    if nc not in exons[e].cluster:
-                        exons[e].cluster.append(nc)
-
-                    if exons[e].end not in exons[nc].connectedExons:
-                        exons[nc].connectedExons.append(exons[e].end)
-
-    for e in exons:
-        if len(exons[e].cluster) == 1 and len(exons[e].connectedExons) >= 2:
-            exonClusters.append(e)
-            clusterReferences.add(exons[e].reference)
-
-    print >> sys.stderr, 'total clusters =', len(exonClusters)
-    return exonClusters, clusterReferences
+def mergeCluster(clusters, clusterConnections):
+    #print '=|='*40
+    #print 'Merging...'
+    #print '=|='*40
+    visited = []
+    mergedClusters = {}
+    for cluster in clusterConnections:
+        if cluster not in visited:
+            try:
+                linkedExons = mergedClusters[cluster]
+            except KeyError:
+                mergedClusters[cluster] = clusters[cluster]
+            #print '-->', cluster
+            for linked in clusterConnections[cluster]:
+                #print '\t\t-->', linked
+                visited.append(linked)
+                mergedClusters[cluster].union(clusters[linked])
+    return mergedClusters
 
 def buildGeneModels(exons, exonClusters, clusterReferences):
 
@@ -228,29 +164,38 @@ def buildGeneModels(exons, exonClusters, clusterReferences):
                 '''
                     Resolve alternative splice sites.
                 '''
-
                 newConnectedExons = connectedExons
+                print '---newConnectedExons---'
+                for e in newConnectedExons:
+                    print exons[e].start, exons[e].end
                 cleanedConExons = []
                 h = 1
                 exEnd = newConnectedExons[0]
                 exStart = exons[exEnd].start
+                print exStart, exEnd
                 while h < len(newConnectedExons):
                     nextEnd = newConnectedExons[h]
                     nextStart = exons[nextEnd].start
+                    print '\t-->', nextStart, nextEnd,
                     if exStart == nextStart:
                         if exons[nextEnd].junctions:
                             exStart, exEnd = nextStart, nextEnd
                         else:
                             if not exons[exEnd].junctions:
                                 exStart, exEnd = nextStart, nextEnd
+                        print
                     else:
-                        if exEnd < nextStart:
+                        if nextStart-exEnd >=30:
                             cleanedConExons.append((exStart, exEnd))
+                            print nextStart-exEnd, 'real exon', exStart, exEnd, 'added'
                             exStart, exEnd = nextStart, nextEnd 
                         else:
                             if exEnd < nextEnd:
+                                print nextStart-exEnd,
                                 exEnd = nextEnd
+                                print 'new exEnd', exStart, exEnd
                     h += 1
+                    print exStart, exEnd
                 cleanedConExons.append((exStart, exEnd))
                 geneModels[ref].append(cleanedConExons)
 
@@ -310,64 +255,79 @@ def getSequenceExonWise2(geneModels, genome):
             '''
             transcriptNumber += 1
         op.close()
-
-def printBed(geneModels):
+def printBed2(clusters):
 
     writer = csv.writer(sys.stdout, dialect='excel-tab')
+    for ref, ID in clusters:
+        cl = sorted(clusters[(ref,ID)])
+        transcriptNumber = ID
+        chromStart = cl[0][1]
+        blockStarts = [j[1] - chromStart for j in cl]
+        blockSizes = [j[2] - j[1] for j in cl]
 
-    for ref in geneModels:
-        transcriptNumber = 0
-        for model in geneModels[ref]:
-            transcriptNumber += 1
-            chromStart = model[0][0]
-            blockStarts = [j[0] - chromStart for j in model]
-            blockSizes = [j[1] - j[0] for j in model]
-
-            chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
-            blockCount = len(blockStarts)
-            newBlockStarts = [str(i) for i in blockStarts]
-            newBlockSizes = [str(i) for i in blockSizes]
-            chrom = ref
-            name="%s_%d" % (chrom, transcriptNumber)
-            strand = "+"
-            score=1000
-            itemRgb="0,0,0"
-            writer.writerow((chrom,
-                            chromStart,
-                            chromEnd, 
-                            name,
-                            score,
-                            strand,
-                            chromStart, 
-                            chromEnd,
-                            itemRgb,
-                            blockCount,
-                            ','.join(newBlockSizes),
-                            ','.join(newBlockStarts)))
+        chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
+        blockCount = len(blockStarts)
+        newBlockStarts = [str(i) for i in blockStarts]
+        newBlockSizes = [str(i) for i in blockSizes]
+        chrom = ref
+        name="%s_%d" % (chrom, transcriptNumber)
+        strand = "+"
+        score=1000
+        itemRgb="0,0,0"
+        writer.writerow((chrom,
+                        chromStart,
+                        chromEnd, 
+                        name,
+                        score,
+                        strand,
+                        chromStart, 
+                        chromEnd,
+                        itemRgb,
+                        blockCount,
+                        ','.join(newBlockSizes),
+                        ','.join(newBlockStarts)))
 
     return newBlockStarts, newBlockSizes
 
 if __name__ == '__main__':
 
-    print >> sys.stderr, 'Constructing exons ...'
-
     exons = {}
-
+    clusters = {}
+    newClusterID = 0
+    clusterConnections = {}
+    print >> sys.stdout, 'Parsing and clustering exons..'
     for alnObj in psl_parser.read(open(sys.argv[1]), 'track'):
         tStarts = alnObj.attrib['tStarts']
         blockSizes = alnObj.attrib['blockSizes']
         tName = alnObj.attrib['tName']
         qName = alnObj.attrib['qName']
-        construct(tName, tStarts, blockSizes, exons)
-
-    print >> sys.stderr, 'total exons = %d' % len(exons)
-
-    print >> sys.stderr, 'Clustering exons ...'
-    exonClusters, clusterReferences = cluster(exons)
-    print exonClusters
-    print >> sys.stderr, 'Building gene models ...'
-    geneModels = buildGeneModels(exons, exonClusters, clusterReferences)
+        newClusterID = construct(tName, tStarts, blockSizes,
+                                    exons, clusters, newClusterID,
+                                    clusterConnections,
+                                    )
+    print >> sys.stdout, '%d exons have been loaded..' % len(exons)
+    print >> sys.stdout, 'Linking clusters...'
+    mergedClusters = mergeCluster(clusters, clusterConnections)
+    '''
+    print '--|--'*20
+    for mc in mergedClusters:
+        print mc, mergedClusters[mc]
+        print '-*-'*40
+    c0 = clusters[('chr1', 0)]
+    c1 = clusters[('chr1', 1)]
+    c2 = clusters[('chr1', 2)]
+    print 'c1 vs c2'
+    print c1.intersection(c2)
+    print 'c2 vs c0'
+    print c2.intersection(c0)
+    print 'c1 vs c0'
+    print c0.intersection(c1)
+    #print >> sys.stderr, 'total exons = %d' % len(exons)
+    #print >> sys.stderr, 'Building gene models ...'
+    #geneModels = buildGeneModels(exons, exonClusters, clusterReferences)
     #validateExonLength(geneModels)
     #genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
     #getSequenceExonWise2(geneModels, genome)
-    sizes, starts = printBed(geneModels)
+    '''
+    sizes, starts = printBed2(mergedClusters)
+    print >> sys.stderr, 'total %d transcripts found.' % (len(mergedClusters))
