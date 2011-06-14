@@ -14,12 +14,13 @@
 
     Author: Likit Preeyanon
     Email: preeyano@msu.edu
+    Last updated: 6/11/2011
 '''
 
 import psl_parser
 import sys
 import csv
-from pygr import seqdb, sequtil
+#from pygr import seqdb, sequtil
 
 def construct(tName, tStarts, blockSizes, exons,
                 clusters, newClusterID, clusterConnections):
@@ -82,18 +83,39 @@ def construct(tName, tStarts, blockSizes, exons,
 
     return newClusterID
 
-def mergeCluster(clusters, clusterConnections):
+def walk(allExons, nodes, clusters, clusterConnections, visited):
+
+    ''' This function walks over all clusters connected to
+    the starting cluster and combine all exons to those is
+    the starting cluster.
+
+    '''
+    if nodes not in visited:
+        for n in nodes:
+            if n not in visited:
+                visited.append(n)
+                allExons = allExons.union(clusters[n])
+                nodes = clusterConnections[n]
+                allExons = walk(allExons, nodes, clusters, clusterConnections, visited)
+    return allExons
+
+def mergeClusters(clusters, clusterConnections):
+
+    ''' This function merge all clusters sharing at least one exon
+    together to form a bigger cluster.
+
+    '''
     visited = []
     mergedClusters = {}
-    for cluster in clusterConnections:
-        if cluster not in visited:
-            try:
-                linkedExons = mergedClusters[cluster]
-            except KeyError:
-                mergedClusters[cluster] = clusters[cluster]
-            for linked in clusterConnections[cluster]:
-                visited.append(linked)
-                mergedClusters[cluster].union(clusters[linked])
+    for i, c in enumerate(clusterConnections, start=1):
+        if c not in visited:
+            visited.append(c)
+            allExons = clusters[c]
+            nodes = clusterConnections[c]
+            allExons = walk(allExons, nodes, clusters, clusterConnections, visited) 
+            mergedClusters[c] = allExons
+        if i%1000 == 0:
+            print >> sys.stderr, '...', i, 'merged..'
     return mergedClusters
 
 def buildGeneModels(mergedClusters):
@@ -138,21 +160,6 @@ def validateExonLength(geneModels):
                     geneLength = (end - start)
             print '%s gene %d length = %d' % (ref, geneNo, geneLength%3)
             geneNo += 1
-
-def getSequenceExonWise(geneModels, genome):
-    for ref in geneModels:
-        transcriptNumber = 1
-        op = open(ref+'.fasta', 'w')
-        for gene in geneModels[ref]:
-            exonNumber = 1
-            for exon in gene:
-                start, end = exon
-                seq = genome[ref][start:end]
-                exonID = 'gene_%d:exon_%d' % (transcriptNumber,exonNumber)
-                sequtil.write_fasta(op,str(seq), id=exonID)
-                exonNumber += 1
-            transcriptNumber += 1
-        op.close()
 
 def getSequenceExonWise2(geneModels, genome):
     for ref in geneModels:
@@ -214,8 +221,7 @@ def printBed(clusters):
 
     return newBlockStarts, newBlockSizes
 
-if __name__ == '__main__':
-
+def main():
     exons = {}
     clusters = {}
     newClusterID = 0
@@ -228,8 +234,7 @@ if __name__ == '__main__':
         qName = alnObj.attrib['qName']
         newClusterID = construct(tName, tStarts, blockSizes,
                                     exons, clusters, newClusterID,
-                                    clusterConnections,
-                                    )
+                                    clusterConnections,)
     sumExons = {}
     for ref, end in exons:
         try:
@@ -238,9 +243,9 @@ if __name__ == '__main__':
             sumExons[ref] = 1
     for ref in sorted(sumExons):
         print >> sys.stderr, '\t%s has %d exon(s).' % (ref, sumExons[ref])
-
-    print >> sys.stderr, '\nLinking clusters..'
-    mergedClusters = mergeCluster(clusters, clusterConnections)
+    print >> sys.stderr, '\nTotal %d cluster(s) found.' % len(clusters)
+    print >> sys.stderr, '\nMerging clusters..'
+    mergedClusters = mergeClusters(clusters, clusterConnections)
     print >> sys.stderr, '\nBuilding gene models..'
     geneModels = buildGeneModels(mergedClusters)
     allReferences = {}
@@ -250,9 +255,12 @@ if __name__ == '__main__':
         except KeyError:
             allReferences[ref] = 1
     for ref in sorted(allReferences):
-        print >> sys.stderr, '\t%s has %d genes.' % (ref, allReferences[ref])
+        print >> sys.stderr, '\t%d gene(s) found in %s.' % (allReferences[ref], ref)
     #validateExonLength(geneModels)
     #genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
     #getSequenceExonWise2(geneModels, genome)
     print >> sys.stderr, '\nWriting gene models in BED format..\n'
     sizes, starts = printBed(geneModels)
+
+if __name__ == '__main__':
+    main()
