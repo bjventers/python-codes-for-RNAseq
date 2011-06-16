@@ -183,20 +183,6 @@ def buildPaths(linkedExons, txExons, allPaths, ignored):
                                         )
     return paths
 
-def validateExonLength(geneModels):
-    for ref in geneModels:
-        geneNo = 1
-        for gene in geneModels[ref]:
-            geneLength = 0
-            for i in range(len(gene)-1):
-                if i == 0:
-                    continue
-                else:
-                    start, end = gene[i]
-                    geneLength = (end - start)
-            print '%s gene %d length = %d' % (ref, geneNo, geneLength%3)
-            geneNo += 1
-
 def getSequenceExonWise2(geneModels, genome):
     for ref in geneModels:
         transcriptNumber = 1
@@ -223,7 +209,7 @@ def getSequenceExonWise2(geneModels, genome):
             transcriptNumber += 1
         op.close()
 
-def printBed(clusters):
+def printBed_isoforms(clusters):
 
     writer = csv.writer(sys.stdout, dialect='excel-tab')
     for ref, ID in clusters:
@@ -396,7 +382,7 @@ def main():
     print >> sys.stderr, '\nWriting gene models in BED format..\n'
     '''
     #getSequenceExonWise(allPaths, genome)
-    sizes, starts = printBed(allPaths)
+    sizes, starts = printBed_isoforms(allPaths)
 
 if __name__ == '__main__':
     main()
