@@ -397,12 +397,14 @@ def cleanUpLinkedExons(linkedExons, exonPositions):
                             curRef, curStart, curEnd = keys[h]
                 else:
                     curRef, curStart, curEnd = keys[h]
+    '''
     for k in sorted(keys, key=lambda x: x[-1]):
         print >> sys.stderr, k, linkedExons[k], exonPositions[k],
         if k in ignored:
             print >> sys.stderr, '*'
         else:
             print >> sys.stderr, '\n'
+    '''
     return ignored
 
 def main():
