@@ -23,6 +23,29 @@ import csv
 #from pygr import seqdb, sequtil
 from operator import itemgetter
 
+def deleteGap(tName, tStarts, blockSizes):
+    '''
+        Delete all small gaps and overlapped exons.
+    '''
+
+    exonSet = []
+    i = 0
+    ref, start ,end = tName, tStarts[0], tStarts[0]+blockSizes[0]
+    while i < range(len(tStarts)): 
+        try:
+            ref, nextStart, nextEnd = tName, tStarts[i+1], tStarts[i+1]+blockSizes[i+1]
+        except IndexError:
+            exonSet.append((tName, start, end))
+            break
+        else:
+            if nextStart - end < 21:
+                end = nextEnd
+            else:
+                exonSet.append((tName, start, end))
+                start, end = nextStart, nextEnd
+        i += 1
+    return exonSet
+
 def construct(tName, tStarts, blockSizes, exons,
                 clusters, newClusterID, clusterConnections,
                 linkedExons, exonPositions):
@@ -31,28 +54,9 @@ def construct(tName, tStarts, blockSizes, exons,
     '''
     exonGroup = set([])
     connection = set([])
-    exonSet = []
-    delete = 0
-    i = 0
-    while i < len(tStarts):
-        end = tStarts[i] + blockSizes[i]
-        start = tStarts[i]
-        try:
-            nextExonEnd = tStarts[i+1]+blockSizes[i+1]
-            nextExonStart = tStarts[i+1]
-        except IndexError:
-            exonSet.append((tName, start, end))
-            break
-        else:
-            if end == nextExonStart:
-                end = nextExonEnd
-                exonSet.append((tName, start, end))
-                delete += 1
-                i += 2
-                if i >= len(tStarts): break
-            else:
-                exonSet.append((tName, start, end))
-                i += 1
+    exonSet = deleteGap(tName, tStarts, blockSizes)
+    if len(exonSet) == 1:
+        return newClusterID
 
     for i in range(len(exonSet)):
         tName, start, end = exonSet[i]
@@ -61,7 +65,7 @@ def construct(tName, tStarts, blockSizes, exons,
             try:
                 linkedExons[(tName, start, end)].add((tName, juncExonStart, juncExonEnd))
             except KeyError:
-                linkedExons[(tName, start, end)] = set([])
+                linkedExons[(tName, start, end)] = set([(tName, juncExonStart, juncExonEnd)])
         except IndexError:
             try:
                 allLinks = linkedExons[(tName, start, end)]
@@ -70,16 +74,23 @@ def construct(tName, tStarts, blockSizes, exons,
 
         exonGroup.add((tName, start, end))
 
+        '''
+            Assign position of the exons:
+                -1 = first exon
+                0  = middle exon
+                1  = last exon
+        '''
         try:
             position = exonPositions[(tName, start, end)]
         except KeyError:
             if i == 0:
                 exonPositions[(tName, start, end)] = -1
-            elif i == len(tStarts)-1:
+            elif i == len(exonSet)-1:
                 exonPositions[(tName, start, end)] = 1
             else:
                 exonPositions[(tName, start, end)] = 0
-
+        else:
+            pass
     ''' 
         If at least one exon connects to an existing cluster,
         add all new exons to that cluster and exons database.
@@ -183,6 +194,37 @@ def buildPaths(linkedExons, txExons, allPaths, ignored):
                                         )
     return paths
 
+def buildGeneModels(mergedClusters, exonPositions):
+
+    geneModels = {}
+    for cluster in mergedClusters:
+        connectedExons = sorted(mergedClusters[cluster])
+        cleanedConExons = []
+        ref, exonStart, exonEnd = connectedExons[0]
+        exonPosition = exonPositions[(ref, exonStart, exonEnd)]
+        h = 1
+        while h < len(connectedExons):
+            ref, nextExonStart, nextExonEnd = connectedExons[h]
+            nextExonPosition = exonPositions[(ref, nextExonStart, nextExonEnd)]
+            if exonStart == nextExonStart:
+                if nextExonPosition > -1:
+                    exonStart, exonEnd = nextExonStart, nextExonEnd
+                else:
+                    if not exonPosition > -1:
+                        exonStart, exonEnd = nextExonStart, nextExonEnd
+            else:
+                if nextExonStart-exonEnd >=30:
+                    cleanedConExons.append((exonStart, exonEnd))
+                    exonStart, exonEnd = nextExonStart, nextExonEnd 
+                else:
+                    if exonEnd < nextExonEnd:
+                        exonEnd = nextExonEnd
+            h += 1
+        cleanedConExons.append((exonStart, exonEnd))
+        geneModels[cluster] = cleanedConExons
+
+    return geneModels
+
 def getSequenceExonWise2(geneModels, genome):
     for ref in geneModels:
         transcriptNumber = 1
@@ -209,13 +251,49 @@ def getSequenceExonWise2(geneModels, genome):
             transcriptNumber += 1
         op.close()
 
-def printBed_isoforms(clusters):
+def printBedUnigene(clusters):
+
+    writer = csv.writer(sys.stdout, dialect='excel-tab')
+    for ref, ID in clusters:
+        cl = sorted(clusters[(ref,ID)])
+        transcriptNumber = ID
+        chromStart = cl[0][0]
+        blockStarts = [j[0] - chromStart for j in cl]
+        blockSizes = [j[1] - j[0] for j in cl]
+
+        chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
+        blockCount = len(blockStarts)
+        newBlockStarts = [str(i) for i in blockStarts]
+        newBlockSizes = [str(i) for i in blockSizes]
+        chrom = ref
+        name="%s_%d" % (chrom, transcriptNumber)
+        strand = "+"
+        score=1000
+        itemRgb="0,0,0"
+        writer.writerow((chrom,
+                        chromStart,
+                        chromEnd, 
+                        name,
+                        score,
+                        strand,
+                        chromStart, 
+                        chromEnd,
+                        itemRgb,
+                        blockCount,
+                        ','.join(newBlockSizes),
+                        ','.join(newBlockStarts)))
+
+    return newBlockStarts, newBlockSizes
+
+def printBedIsoforms(clusters):
 
     writer = csv.writer(sys.stdout, dialect='excel-tab')
     for ref, ID in clusters:
         isoformNum = 0
         for isoforms in clusters[(ref,ID)]:
             cl = sorted(isoforms)
+            if len(cl) == 1:
+                continue
             chromStart = cl[0][1]
             blockStarts = [j[1] - chromStart for j in cl]
             blockSizes = [j[2] - j[1] for j in cl]
@@ -302,6 +380,7 @@ def cleanUpLinkedExons(linkedExons, exonPositions):
                         if nextPosition == 0 and curPosition == 1:
                             linkedExons[(nextRef, nextStart, nextEnd)] = \
                             linkedExons[(nextRef, nextStart, nextEnd)].union(curLinkedExons)
+                            linkedExons[(keys[h-2])].add((nextRef, nextStart, nextEnd)) # link the longer exon to the previous exon.
                             ignored.append((curRef, curStart, curEnd))
                             curRef, curStart, curEnd = keys[h]
                         elif nextPosition == 1 and curPosition == 0:
@@ -312,20 +391,18 @@ def cleanUpLinkedExons(linkedExons, exonPositions):
                             else:
                                 curRef, curStart, curEnd = keys[h]
                         elif nextPosition == 1 and curPosition == 1:
-                            linkedExons[(nextRef, nextStart, nextEnd)] = \
-                            linkedExons[(nextRef, nextStart, nextEnd)].union(curLinkedExons)
+                            #linkedExons[(nextRef, nextStart, nextEnd)] = \
+                            #linkedExons[(nextRef, nextStart, nextEnd)].union(curLinkedExons)
                             ignored.append((curRef, curStart, curEnd))
                             curRef, curStart, curEnd = keys[h]
                 else:
                     curRef, curStart, curEnd = keys[h]
-    '''
-    for k in keys:
+    for k in sorted(keys, key=lambda x: x[-1]):
         print >> sys.stderr, k, linkedExons[k], exonPositions[k],
         if k in ignored:
             print >> sys.stderr, '*'
         else:
             print >> sys.stderr, '\n'
-    '''
     return ignored
 
 def main():
@@ -342,9 +419,9 @@ def main():
         tName = alnObj.attrib['tName']
         qName = alnObj.attrib['qName']
         newClusterID = construct(tName, tStarts, blockSizes,
-                                    exons, clusters, newClusterID,
-                                    clusterConnections,
-                                    linkedExons, exonPositions)
+                                exons, clusters, newClusterID,
+                                clusterConnections,
+                                linkedExons, exonPositions)
     sumExons = {}
     for ref, end in exons:
         try:
@@ -356,19 +433,20 @@ def main():
     print >> sys.stderr, '\nTotal %d cluster(s) found.' % len(clusters)
     print >> sys.stderr, '\nMerging clusters..'
     mergedClusters = mergeClusters(clusters, clusterConnections)
-    print >> sys.stderr, '\nCleaning up..'
+    #print >> sys.stderr, '\nCleaning up..'
     ignored = cleanUpLinkedExons(linkedExons, exonPositions)
-    print >> sys.stderr, '\nBuilding gene models..'
+    #print >> sys.stderr, '\nBuilding gene models..'
     allPaths = {}
     for n, cl in enumerate(mergedClusters):
         txExons = mergedClusters[cl]
         paths = buildPaths(linkedExons, txExons, allPaths, ignored)
         allPaths[cl] = paths
         if n %1000 == 0:
-            print >> sys.stderr, n, 'built..'
+            if n > 0:
+                print >> sys.stderr, '... %d built..' % n
     '''
     print >> sys.stderr, '\nBuilding gene models..'
-    geneModels = buildGeneModels(mergedClusters)
+    geneModels = buildGeneModels(mergedClusters, exonPositions)
     allReferences = {}
     for ref, ID in clusters.keys():
         try:
@@ -382,7 +460,8 @@ def main():
     print >> sys.stderr, '\nWriting gene models in BED format..\n'
     '''
     #getSequenceExonWise(allPaths, genome)
-    sizes, starts = printBed_isoforms(allPaths)
+    sizes, starts = printBedIsoforms(allPaths)
+    #sizes, starts = printBedUnigene(geneModels)
 
 if __name__ == '__main__':
     main()
