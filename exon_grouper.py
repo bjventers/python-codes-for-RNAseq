@@ -122,7 +122,7 @@ def construct(tName, tStarts, blockSizes, exons,
 
     for tName, start, end in sorted(exonGroup):
         try:
-            clusterID = exons[(tName, end)]
+            clusterID = exons[(tName, start)]
         except KeyError:
             pass
         else:
@@ -131,7 +131,7 @@ def construct(tName, tStarts, blockSizes, exons,
     if connection:
         clusters[clusterID] = clusters[clusterID].union(exonGroup)
         for tName, start, end in sorted(exonGroup):
-            exons[(tName, end)] = clusterID
+            exons[(tName, start)] = clusterID
         for c in connection:
             clusterConnections[c] = clusterConnections[c].union(connection)
     else:
@@ -144,7 +144,7 @@ def construct(tName, tStarts, blockSizes, exons,
         clusterConnections[(tName, newClusterID)] = set([])
         for tName, start, end in sorted(exonGroup):
             try:
-                exons[(tName, end)] = (tName, newClusterID)
+                exons[(tName, start)] = (tName, newClusterID)
             except:
                 raise KeyError
         newClusterID += 1
@@ -344,11 +344,9 @@ def printBedIsoforms(clusters):
                             ','.join(newBlockStarts)))
             isoformNum += 1
 
-def cleanUpLinkedExons(linkedExons, exonPositions):
-    ignored = []
-    print >> sys.stderr, 'Cleaning stage 1...'
+def cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored):
     h = 0
-    keys = sorted(linkedExons.keys(), key=itemgetter(2,1)) # sort by End then by Start.
+    keys = sorted(allExons, key=itemgetter(2,1)) # sort by End then by Start.
     curRef, curStart, curEnd = keys[0]
     while True:
         h += 1
@@ -369,21 +367,18 @@ def cleanUpLinkedExons(linkedExons, exonPositions):
                                 if nextStart - curStart < 20:
                                     linkedExons[(nextRef, nextStart, nextEnd)] = \
                                     linkedExons[(nextRef, nextStart, nextEnd)].union(curLinkedExons)
-                                    ignored.append((curRef, curStart, curEnd))
+                                    ignored.add((curRef, curStart, curEnd))
                                     curRef, curStart, curEnd = keys[h]
                             elif curPosition == 0 and nextPosition == 0:
                                 pass
-                            elif curPosition == 1 and nextPosition == -1:
-                                print >> sys.stderr, curStart, curEnd, nextStart, nextEnd
                             else: 
                                 linkedExons[(curRef, curStart, curEnd)] = \
                                 linkedExons[(curRef, curStart, curEnd)].union(nextLinkedExons)
-                                ignored.append((nextRef, nextStart, nextEnd))
+                                ignored.add((nextRef, nextStart, nextEnd))
                     else:
                         curRef, curStart, curEnd = keys[h]
-    print >> sys.stderr, 'Cleaning stage 2...'
     h = 0
-    keys = sorted(linkedExons.keys(), key=itemgetter(1,2)) # sort by Start then End.
+    keys = sorted(allExons, key=itemgetter(1,2)) # sort by Start then End.
     curRef, curStart, curEnd = keys[h]
     secondLastExons = set([])
     while True:
@@ -404,17 +399,17 @@ def cleanUpLinkedExons(linkedExons, exonPositions):
                         if nextPosition == 0 and curPosition == 1:
                             linkedExons[(nextRef, nextStart, nextEnd)] = \
                             linkedExons[(nextRef, nextStart, nextEnd)].union(curLinkedExons)
-                            ignored.append((curRef, curStart, curEnd))
+                            ignored.add((curRef, curStart, curEnd))
                             curRef, curStart, curEnd = keys[h]
                         elif nextPosition == 1 and curPosition == 0:
                             if nextEnd - curEnd < 20:
                                 linkedExons[(curRef, curStart, curEnd)] = \
                                 linkedExons[(curRef, curStart, curEnd)].union(nextLinkedExons)
-                                ignored.append((nextRef, nextStart, nextEnd))
+                                ignored.add((nextRef, nextStart, nextEnd))
                             else:
                                 curRef, curStart, curEnd = keys[h]
                         elif nextPosition == 1 and curPosition == 1:
-                            ignored.append((curRef, curStart, curEnd))
+                            ignored.add((curRef, curStart, curEnd))
                             curRef, curStart, curEnd = keys[h]
                 else:
                     curRef, curStart, curEnd = keys[h]
@@ -426,7 +421,6 @@ def cleanUpLinkedExons(linkedExons, exonPositions):
         else:
             print >> sys.stderr, '\n'
     '''
-    return ignored
 
 def main():
     exons = {}
@@ -463,7 +457,11 @@ def main():
     print >> sys.stderr, '\nMerging clusters..'
     mergedClusters = mergeClusters(clusters, clusterConnections)
     print >> sys.stderr, '\nCleaning up..'
-    ignored = cleanUpLinkedExons(linkedExons, exonPositions)
+    ignored = set([])
+    for cl in mergedClusters:
+        print >> sys.stderr, '... sequence = %s, ID = %d' % (cl[0], cl[-1])
+        allExons = mergedClusters[cl]
+        cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored)
 
     print >> sys.stderr, 'Modifying the right end of each transcript..'
     for cl in mergedClusters:
@@ -485,23 +483,15 @@ def main():
         if n %1000 == 0:
             if n > 0:
                 print >> sys.stderr, '... %d built..' % n
-    '''
-    uniGenes = {}
-    for cl in allPaths:
-        uniGeneExons = set([])
-        for isoformExons in allPaths[cl]:
-            uniGeneExons = uniGeneExons.union(set(isoformExons))
-        uniGenes[cl] = uniGeneExons
-    '''
 
-    geneModels = buildGeneModels(mergedClusters, exonPositions)
+    #geneModels = buildGeneModels(mergedClusters, exonPositions)
 
     #print >> sys.stderr, '\nWriting gene models in BED format..\n'
     #print >> sys.stderr, mergedClusters
-    #printBedIsoforms(allPaths)
+    printBedIsoforms(allPaths)
     #printBedUnigene(geneModels)
-    genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
-    getSequenceExonWiseUnigene(geneModels, genome)
+    #genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
+    #getSequenceExonWiseUnigene(geneModels, genome)
     #getSequenceExonWiseIsoform(allPaths, genome)
 
 if __name__ == '__main__':
