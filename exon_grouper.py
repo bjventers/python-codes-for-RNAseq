@@ -20,7 +20,7 @@
 import psl_parser
 import sys
 import csv
-#from pygr import seqdb, sequtil
+from pygr import seqdb, sequtil
 from operator import itemgetter
 
 def deleteGap(tName, tStarts, blockSizes):
@@ -46,9 +46,32 @@ def deleteGap(tName, tStarts, blockSizes):
         i += 1
     return exonSet
 
+def findLongestEnd(allExons, linkedExons, endExons, exonPositions, ignored):
+    allExons = sorted(allExons, reverse=True)
+    curRef, curStart, curEnd = allExons[0]
+    curPos = exonPositions[(curRef, curStart, curEnd)]
+    change = []
+    i = 1
+    while True:
+        i += 1
+        try:
+            nextRef, nextStart, nextEnd = allExons[i]
+            nextPos = exonPositions[(nextRef, nextStart, nextEnd)]
+        except IndexError:
+            break
+        else:
+            if curStart == nextStart:
+                if curPos == 1 and nextPos == 1:
+                    change.append((nextRef, nextStart, nextEnd))
+            else:
+                for c in change:
+                    secondLastExon = endExons[c] 
+                    linkedExons[secondLastExon].add((curRef, curStart, curEnd))
+                    #print c, linkedExons[c], '-->', curRef, curStart, curEnd, '-->', secondLastExon, linkedExons[secondLastExon]
+
 def construct(tName, tStarts, blockSizes, exons,
                 clusters, newClusterID, clusterConnections,
-                linkedExons, exonPositions):
+                linkedExons, exonPositions, endExons):
     '''
         Constructs a dictionary containing all exon.
     '''
@@ -71,6 +94,7 @@ def construct(tName, tStarts, blockSizes, exons,
                 allLinks = linkedExons[(tName, start, end)]
             except KeyError:
                 linkedExons[(tName, start, end)] = set([])
+                endExons[(tName, start, end)] = exonSet[i-1]
 
         exonGroup.add((tName, start, end))
 
@@ -162,35 +186,36 @@ def mergeClusters(clusters, clusterConnections):
             print >> sys.stderr, '...', i, 'merged..'
     return mergedClusters
 
-def walkFork(nodes, linkedExons, passed, paths, visited, ignored):
+def walkFork(nodes, linkedExons, passed, paths, visited, ignored, txExons):
     nodes = sorted(nodes)
     if nodes:
         while nodes:
             direction = nodes.pop()
-            visited.append(direction)
-            if direction not in ignored:
+            visited.add(direction)
+            if direction not in ignored: 
                 passed.append(direction)
                 walkFork(linkedExons[direction],
                                     linkedExons,
                                     passed, paths,
                                     visited,
                                     ignored,
+                                    txExons,
                                     )
                 passed.pop()
     else:
         paths.append(passed[:])
 
-def buildPaths(linkedExons, txExons, allPaths, ignored):
-    visited = []
+def buildPaths(linkedExons, txExons, allPaths, ignored, visited):
     paths = []
     for c in sorted(txExons):
         if c not in visited and c not in ignored:
             passed = [c]
-            visited.append(c)
+            visited.add(c)
             walkFork(linkedExons[c], linkedExons,
                                         passed, paths,
                                         visited,
                                         ignored,
+                                        txExons,
                                         )
     return paths
 
@@ -198,7 +223,7 @@ def buildGeneModels(mergedClusters, exonPositions):
 
     geneModels = {}
     for cluster in mergedClusters:
-        connectedExons = sorted(mergedClusters[cluster])
+        connectedExons = sorted(mergedClusters[cluster], key=itemgetter(1,2))
         cleanedConExons = []
         ref, exonStart, exonEnd = connectedExons[0]
         exonPosition = exonPositions[(ref, exonStart, exonEnd)]
@@ -210,46 +235,44 @@ def buildGeneModels(mergedClusters, exonPositions):
                 if nextExonPosition > -1:
                     exonStart, exonEnd = nextExonStart, nextExonEnd
                 else:
-                    if not exonPosition > -1:
+                    if not exonPosition > -1: # exonPosition == -1?
                         exonStart, exonEnd = nextExonStart, nextExonEnd
             else:
                 if nextExonStart-exonEnd >=30:
-                    cleanedConExons.append((exonStart, exonEnd))
+                    cleanedConExons.append((ref, exonStart, exonEnd))
                     exonStart, exonEnd = nextExonStart, nextExonEnd 
+                    exonPosition = nextExonPosition
                 else:
                     if exonEnd < nextExonEnd:
                         exonEnd = nextExonEnd
+                        exonPosition = nextExonPosition
+
             h += 1
-        cleanedConExons.append((exonStart, exonEnd))
+        cleanedConExons.append((ref, exonStart, exonEnd))
         geneModels[cluster] = cleanedConExons
 
     return geneModels
 
-def getSequenceExonWise2(geneModels, genome):
-    for ref in geneModels:
-        transcriptNumber = 1
-        op = open(ref+'.fasta', 'w')
-        for gene in geneModels[ref]:
-            exonSeqs = []
-            shortExon = False
+def getSequenceExonWiseIsoform(allPaths, genome):
+    for ref in allPaths:
+        for gene in allPaths[ref]:
+            seq = ''
             for exon in gene:
-                start, end = exon
-                seq = genome[ref][start:end]
-                exonSeqs.append(str(seq))
-                if len(seq)<3:
-                    print transcriptNumber, gene
-                    '''
-                    if not shortExon:
-                        shortExon = True
-                    '''
-            '''
-            if shortExon:
-                print >> op, '>gene_%d' % transcriptNumber
-                for seq in exonSeqs:
-                    print >> op, str(seq) 
-            '''
-            transcriptNumber += 1
-        op.close()
+                r, start, end = exon 
+                seq += str(genome[r][start:end])
+            print '>%s:%d:%d\n%s' % (r, start, end, seq)
+
+def getSequenceExonWiseUnigene(allPaths, genome):
+    for cl in allPaths:
+        ref, ID = cl
+        seq = ''
+        allExons = sorted(allPaths[cl])
+        firstStart = allExons[0][1]
+        lastEnd = allExons[-1][-1]
+        print '>%s:%d:%d' % (ref, firstStart, lastEnd)
+        for exon in allPaths[cl]:
+            r, start, end = exon 
+            print str(genome[r][start:end])
 
 def printBedUnigene(clusters):
 
@@ -257,9 +280,9 @@ def printBedUnigene(clusters):
     for ref, ID in clusters:
         cl = sorted(clusters[(ref,ID)])
         transcriptNumber = ID
-        chromStart = cl[0][0]
-        blockStarts = [j[0] - chromStart for j in cl]
-        blockSizes = [j[1] - j[0] for j in cl]
+        chromStart = cl[0][1]
+        blockStarts = [j[1] - chromStart for j in cl]
+        blockSizes = [j[2] - j[1] for j in cl]
 
         chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
         blockCount = len(blockStarts)
@@ -321,10 +344,8 @@ def printBedIsoforms(clusters):
                             ','.join(newBlockStarts)))
             isoformNum += 1
 
-    return newBlockStarts, newBlockSizes
-
 def cleanUpLinkedExons(linkedExons, exonPositions):
-    ignored = [] 
+    ignored = []
     print >> sys.stderr, 'Cleaning stage 1...'
     h = 0
     keys = sorted(linkedExons.keys(), key=itemgetter(2,1)) # sort by End then by Start.
@@ -350,9 +371,11 @@ def cleanUpLinkedExons(linkedExons, exonPositions):
                                     linkedExons[(nextRef, nextStart, nextEnd)].union(curLinkedExons)
                                     ignored.append((curRef, curStart, curEnd))
                                     curRef, curStart, curEnd = keys[h]
-                            elif nextPosition == 0 and curPosition == 0:
+                            elif curPosition == 0 and nextPosition == 0:
                                 pass
-                            else:
+                            elif curPosition == 1 and nextPosition == -1:
+                                print >> sys.stderr, curStart, curEnd, nextStart, nextEnd
+                            else: 
                                 linkedExons[(curRef, curStart, curEnd)] = \
                                 linkedExons[(curRef, curStart, curEnd)].union(nextLinkedExons)
                                 ignored.append((nextRef, nextStart, nextEnd))
@@ -362,6 +385,7 @@ def cleanUpLinkedExons(linkedExons, exonPositions):
     h = 0
     keys = sorted(linkedExons.keys(), key=itemgetter(1,2)) # sort by Start then End.
     curRef, curStart, curEnd = keys[h]
+    secondLastExons = set([])
     while True:
         h += 1
         #if (curRef, curStart, curEnd) not in ignored:
@@ -380,7 +404,6 @@ def cleanUpLinkedExons(linkedExons, exonPositions):
                         if nextPosition == 0 and curPosition == 1:
                             linkedExons[(nextRef, nextStart, nextEnd)] = \
                             linkedExons[(nextRef, nextStart, nextEnd)].union(curLinkedExons)
-                            linkedExons[(keys[h-2])].add((nextRef, nextStart, nextEnd)) # link the longer exon to the previous exon.
                             ignored.append((curRef, curStart, curEnd))
                             curRef, curStart, curEnd = keys[h]
                         elif nextPosition == 1 and curPosition == 0:
@@ -391,8 +414,6 @@ def cleanUpLinkedExons(linkedExons, exonPositions):
                             else:
                                 curRef, curStart, curEnd = keys[h]
                         elif nextPosition == 1 and curPosition == 1:
-                            #linkedExons[(nextRef, nextStart, nextEnd)] = \
-                            #linkedExons[(nextRef, nextStart, nextEnd)].union(curLinkedExons)
                             ignored.append((curRef, curStart, curEnd))
                             curRef, curStart, curEnd = keys[h]
                 else:
@@ -414,6 +435,7 @@ def main():
     clusterConnections = {}
     linkedExons = {}
     exonPositions = {}
+    endExons = {}
     print >> sys.stderr, 'Parsing and clustering exons..'
     for alnObj in psl_parser.read(open(sys.argv[1]), 'track'):
         tStarts = alnObj.attrib['tStarts']
@@ -423,7 +445,9 @@ def main():
         newClusterID = construct(tName, tStarts, blockSizes,
                                 exons, clusters, newClusterID,
                                 clusterConnections,
-                                linkedExons, exonPositions)
+                                linkedExons, exonPositions,
+                                endExons)
+    '''
     sumExons = {}
     for ref, end in exons:
         try:
@@ -432,38 +456,53 @@ def main():
             sumExons[ref] = 1
     for ref in sorted(sumExons):
         print >> sys.stderr, '\t%s has %d exon(s).' % (ref, sumExons[ref])
+    '''
+
     print >> sys.stderr, '\nTotal %d cluster(s) found.' % len(clusters)
+
     print >> sys.stderr, '\nMerging clusters..'
     mergedClusters = mergeClusters(clusters, clusterConnections)
-    #print >> sys.stderr, '\nCleaning up..'
+    print >> sys.stderr, '\nCleaning up..'
     ignored = cleanUpLinkedExons(linkedExons, exonPositions)
-    #print >> sys.stderr, '\nBuilding gene models..'
+
+    print >> sys.stderr, 'Modifying the right end of each transcript..'
+    for cl in mergedClusters:
+        findLongestEnd(mergedClusters[cl], linkedExons, endExons, exonPositions, ignored)
+    print >> sys.stderr, '\nBuilding gene models..'
     allPaths = {}
+    singleIsoform = 0
+    gtTenIsoform = 0
+    visited = set([])
     for n, cl in enumerate(mergedClusters):
-        txExons = mergedClusters[cl]
-        paths = buildPaths(linkedExons, txExons, allPaths, ignored)
+        txExons = sorted(mergedClusters[cl])
+        paths = buildPaths(linkedExons, txExons, allPaths, ignored, visited)
+        if len(paths) > 10:
+            gtTenIsoform += 1
+            print >> sys.stderr, cl, 'paths = %d has %d exons' % (len(paths), len(txExons)), '-->', txExons[0]
+        if len(paths) == 1:
+            singleIsoform += 1
         allPaths[cl] = paths
         if n %1000 == 0:
             if n > 0:
                 print >> sys.stderr, '... %d built..' % n
     '''
-    print >> sys.stderr, '\nBuilding gene models..'
-    geneModels = buildGeneModels(mergedClusters, exonPositions)
-    allReferences = {}
-    for ref, ID in clusters.keys():
-        try:
-            allReferences[ref] += 1
-        except KeyError:
-            allReferences[ref] = 1
-    for ref in sorted(allReferences):
-        print >> sys.stderr, '\t%d gene(s) found in %s.' % (allReferences[ref], ref)
-    #validateExonLength(geneModels)
-    #genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
-    print >> sys.stderr, '\nWriting gene models in BED format..\n'
+    uniGenes = {}
+    for cl in allPaths:
+        uniGeneExons = set([])
+        for isoformExons in allPaths[cl]:
+            uniGeneExons = uniGeneExons.union(set(isoformExons))
+        uniGenes[cl] = uniGeneExons
     '''
-    #getSequenceExonWise(allPaths, genome)
-    sizes, starts = printBedIsoforms(allPaths)
-    #sizes, starts = printBedUnigene(geneModels)
+
+    geneModels = buildGeneModels(mergedClusters, exonPositions)
+
+    #print >> sys.stderr, '\nWriting gene models in BED format..\n'
+    #print >> sys.stderr, mergedClusters
+    #printBedIsoforms(allPaths)
+    #printBedUnigene(geneModels)
+    genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
+    getSequenceExonWiseUnigene(geneModels, genome)
+    #getSequenceExonWiseIsoform(allPaths, genome)
 
 if __name__ == '__main__':
     main()
