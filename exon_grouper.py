@@ -264,7 +264,7 @@ def getSequenceExonWiseIsoform(allPaths, genome):
                 r, start, end = exon 
                 seq += str(genome[r][start:end])
             sequences.append(seq)
-            print '>%s:%d:%d\n%s' % (r, start, end, seq.replace('ATG', '@ATG'))
+            print '>%s:%d:%d\n%s' % (r, start, end, seq)
         allSequences[cl] = sequences
     return allSequences
 
@@ -328,20 +328,25 @@ def printBedIsoforms(clusters, genome):
             blockSizes = [j[2] - j[1] for j in cl]
             chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
 
-            frame, startCodon, stopCodon, length = getReadingFrame(cl, genome)
-            
-            rightFrame = False
-            print >> sys.stderr, 'start codon =', startCodon, 'first exon =',blockSizes[0]
-            print >> sys.stderr, 'stop codon =', stopCodon, 'last exon =', sum(blockSizes[:-1])
-            for i in range(1, len(blockSizes)):
-                if startCodon <= sum(blockSizes[:i]):
-                    thickStart = chromStart + (blockSizes[i]-startCodon) + blockStarts[i]
-                    break
-
-            if stopCodon <= sum(blockSizes) and stopCodon >= sum(blockSizes[:-1]):
-                stopCodon = stopCodon - sum(blockSizes[:-1])
-                thickEnd = blockStarts[-1] + stopCodon + chromStart
-                rightFrame = True
+            try:
+                frame, startCodon, stopCodon, length = getReadingFrame(cl, genome)
+                print >> sys.stderr, frame, startCodon, stopCodon, length
+            except TypeError:
+                thickStart = chromStart
+                thickEnd = chromEnd
+                strand = '.'
+            else:
+                if startCodon <= blockSizes[0] and \
+                    (stopCodon <= sum(blockSizes) and stopCodon >= sum(blockSizes[:-1])):
+                    stopCodon = stopCodon - sum(blockSizes[:-1])
+                    thickEnd = blockStarts[-1] + stopCodon + chromStart
+                    thickStart = chromStart + startCodon
+                    strand = "+" if frame > 0 else "-"
+                else:
+                    print >> sys.stderr, 'stopCodon out of range', stopCodon, sum(blockSizes), sum(blockSizes[:-1])
+                    thickStart = chromStart
+                    thickEnd = chromEnd
+                    strand = '.'
 
             blockCount = len(blockStarts)
             newBlockStarts = [str(i) for i in blockStarts]
@@ -349,23 +354,21 @@ def printBedIsoforms(clusters, genome):
 
             chrom = ref
             name="%s_%d_%d" % (chrom, ID, isoformNum)
-            strand = "+" if frame > 0 else "-"
             score=1000
             itemRgb="0,0,0"
-            if rightFrame:
-                writer.writerow((chrom,
-                                chromStart,
-                                chromEnd, 
-                                name,
-                                score,
-                                strand,
-                                thickStart, 
-                                thickEnd,
-                                itemRgb,
-                                blockCount,
-                                ','.join(newBlockSizes),
-                                ','.join(newBlockStarts)))
-                isoformNum += 1
+            writer.writerow((chrom,
+                            chromStart,
+                            chromEnd, 
+                            name,
+                            score,
+                            strand,
+                            thickStart, 
+                            thickEnd,
+                            itemRgb,
+                            blockCount,
+                            ','.join(newBlockSizes),
+                            ','.join(newBlockStarts)))
+            isoformNum += 1
 
 def cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored):
     h = 0
@@ -489,9 +492,10 @@ def getReadingFrame(gene, genome):
                     seqLengths.append(((1+frame)*-1, len(seq) - i, len(seq)-startPos, i-startPos))
                     break
             i += 3
-
-    print >> sys.stderr, sorted(seqLengths, key=lambda x: x[-1], reverse=True)
-    return sorted(seqLengths, key=lambda x: x[-1], reverse=True)[0]
+    if seqLengths:
+        return sorted(seqLengths, key=lambda x: x[-1], reverse=True)[0]
+    else:
+        return None
 
 def main():
     exons = {}
@@ -512,7 +516,6 @@ def main():
                                 clusterConnections,
                                 linkedExons, exonPositions,
                                 endExons)
-    '''
     sumExons = {}
     for ref, end in exons:
         try:
@@ -521,7 +524,6 @@ def main():
             sumExons[ref] = 1
     for ref in sorted(sumExons):
         print >> sys.stderr, '\t%s has %d exon(s).' % (ref, sumExons[ref])
-    '''
 
     print >> sys.stderr, '\nTotal %d cluster(s) found.' % len(clusters)
 
@@ -530,7 +532,6 @@ def main():
     print >> sys.stderr, '\nCleaning up..'
     ignored = set([])
     for cl in mergedClusters:
-        print >> sys.stderr, '... sequence = %s, ID = %d' % (cl[0], cl[-1])
         allExons = mergedClusters[cl]
         cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored)
 
@@ -539,7 +540,6 @@ def main():
         findLongestEnd(mergedClusters[cl], linkedExons, endExons, exonPositions, ignored)
     print >> sys.stderr, '\nBuilding gene models..'
     allPaths = {}
-    singleIsoform = 0
     gtTenIsoform = 0
     visited = set([])
     for n, cl in enumerate(mergedClusters):
@@ -547,7 +547,6 @@ def main():
         paths = buildPaths(linkedExons, txExons, allPaths, ignored, visited)
         if len(paths) > 10:
             gtTenIsoform += 1
-            print >> sys.stderr, cl, 'paths = %d has %d exons' % (len(paths), len(txExons)), '-->', txExons[0]
         if len(paths) == 1:
             singleIsoform += 1
         allPaths[cl] = paths
@@ -563,8 +562,9 @@ def main():
     #getSequenceExonWiseUnigene(geneModels, genome)
     genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
     printBedIsoforms(allPaths, genome)
-    allSequences = getSequenceExonWiseIsoform(allPaths, genome)
+    #allSequences = getSequenceExonWiseIsoform(allPaths, genome)
     #checkReadingFrame(allSequences)
+    print >> sys.stderr, '> 10 isoforms = ', gtTenIsoform
 
 if __name__ == '__main__':
     main()
