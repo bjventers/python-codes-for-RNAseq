@@ -23,6 +23,7 @@ import csv
 from pygr import seqdb, sequtil
 from operator import itemgetter
 from string import maketrans
+from Bio.Blast import NCBIWWW, NCBIXML
 
 def deleteGap(tName, tStarts, blockSizes):
     '''
@@ -329,31 +330,44 @@ def printBedIsoforms(clusters, genome):
             chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
 
             try:
-                frame, startCodon, stopCodon, length = getReadingFrame(cl, genome)
-                print >> sys.stderr, frame, startCodon, stopCodon, length
+                frame, startCodon, stopCodon, length = getStartStopCodon(cl, genome)
             except TypeError:
                 thickStart = chromStart
                 thickEnd = chromEnd
                 strand = '.'
+                frame = 'NA'
             else:
-                if startCodon <= blockSizes[0] and \
-                    (stopCodon <= sum(blockSizes) and stopCodon >= sum(blockSizes[:-1])):
+                if startCodon < blockSizes[0]:
+                    thickStart = chromStart + startCodon
+                else:
+                    for i in range(len(blockSizes)):
+                        if startCodon > sum(blockSizes[:i]):
+                            continue
+                        else:
+                            startCodon = startCodon - sum(blockSizes[:i-1])
+                            thickStart = blockStarts[i-1] + startCodon + chromStart
+                            break
+
+                if stopCodon > sum(blockSizes[:-1]):
                     stopCodon = stopCodon - sum(blockSizes[:-1])
                     thickEnd = blockStarts[-1] + stopCodon + chromStart
-                    thickStart = chromStart + startCodon
-                    strand = "+" if frame > 0 else "-"
                 else:
-                    print >> sys.stderr, 'stopCodon out of range', stopCodon, sum(blockSizes), sum(blockSizes[:-1])
-                    thickStart = chromStart
-                    thickEnd = chromEnd
-                    strand = '.'
+                    for i in range(len(blockSizes)):
+                        if stopCodon > sum(blockSizes[:i]):
+                            continue
+                        else:
+                            stopCodon = stopCodon - sum(blockSizes[:i-1])
+                            thickEnd = blockStarts[i-1] + stopCodon + chromStart
+                            break
+
+                strand = "+" if frame > 0 else "-"
 
             blockCount = len(blockStarts)
             newBlockStarts = [str(i) for i in blockStarts]
             newBlockSizes = [str(i) for i in blockSizes]
 
             chrom = ref
-            name="%s_%d_%d" % (chrom, ID, isoformNum)
+            name="%s_%d_%d_frame_%s" % (chrom, ID, isoformNum, str(frame))
             score=1000
             itemRgb="0,0,0"
             writer.writerow((chrom,
@@ -448,35 +462,66 @@ def cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored):
             print >> sys.stderr, '\n'
     '''
 
-def getReadingFrame(gene, genome):
+def getReadingFrameBLAST(seq):
+
+    result = NCBIWWW.qblast('blastx', 'nr', seq)
+    blastRecord = NCBIXML.read(result)
+    for alignment in blastRecord.alignments:
+        for hsp in alignment.hsps:
+            print >> sys.stderr, '***alignment****'
+            print >> sys.stderr, 'sequence:', alignment.title
+            print >> sys.stderr, 'length:', alignment.length
+            print >> sys.stderr, 'e value:', hsp.expect
+            print >> sys.stderr, hsp.query[0:75] + '...'
+            print >> sys.stderr, hsp.match[0:75] + '...'
+            print >> sys.stderr, hsp.sbjct[0:75] + '...'
+            print >> sys.stderr, hsp.frame
+            print >> sys.stderr, hsp.query_start
+            print >> sys.stderr, hsp.query_end
+        break
+    return hsp.frame[0], hsp.query_start, hsp.query_end
+
+def getStartStopCodon(gene, genome):
     seq = ''
     for exon in gene:
         r, start, end = exon 
         seq += str(genome[r][start:end])
 
-    complement = maketrans('ACGT', 'TGCA')
+    #print >> sys.stderr, 'Doing BLAST (blastx) search against NR...'
+    #readingFrame, alignStart, alignEnd = getReadingFrameBLAST(seq)
+
     seqLengths = []
+
+    '''
+        Forward direction.
+    '''
     for frame in [0,1,2]:
         i = frame
         start = False
-        while True:
+        while i < len(seq):
             codon = seq[i:i+3]
-            if len(codon) < 3:
-                break
             if not start:
                 if codon == 'ATG':
                     start = True
                     startPos = i
             else:
                 if codon in ['TAG', 'TAA', 'TGA']:
-                    seqLengths.append((1+frame, startPos, i, i-startPos))
-                    break
+                    seqLengths.append((frame+1, startPos, i+3, i-startPos))
+                    i = startPos
+                    start = False
             i += 3
+
+    '''
+        Reverse direction.
+    
+    '''
+    complement = maketrans('ACGT', 'TGCA')
     revSeq = list(seq)
     revSeq.reverse()
     revSeq = ''.join(revSeq)
     revSeq = revSeq.translate(complement)
-    for frame in [0, 1,2]:
+
+    for frame in [0, 1, 2]:
         i = frame
         start = False
         while True:
@@ -489,11 +534,14 @@ def getReadingFrame(gene, genome):
                     startPos = i
             else:
                 if codon in ['TAG', 'TAA', 'TGA']:
-                    seqLengths.append(((1+frame)*-1, len(seq) - i, len(seq)-startPos, i-startPos))
-                    break
+                    seqLengths.append(((frame + 1)*-1, len(seq) - (i+3), len(seq)-startPos, i-startPos))
+                    i = startPos
+                    start = False
             i += 3
+
     if seqLengths:
-        return sorted(seqLengths, key=lambda x: x[-1], reverse=True)[0]
+        frame, startCodon, stopCodon, length = sorted(seqLengths, key=lambda x: x[-1])[-1]
+        return sorted(seqLengths, key=lambda x: x[-1])[-1]
     else:
         return None
 
@@ -547,8 +595,6 @@ def main():
         paths = buildPaths(linkedExons, txExons, allPaths, ignored, visited)
         if len(paths) > 10:
             gtTenIsoform += 1
-        if len(paths) == 1:
-            singleIsoform += 1
         allPaths[cl] = paths
         if n %1000 == 0:
             if n > 0:
