@@ -318,12 +318,14 @@ def printBedUnigene(clusters):
 def printBedIsoforms(clusters, genome):
 
     writer = csv.writer(sys.stdout, dialect='excel-tab')
+    geneNo = 0
     for ref, ID in clusters:
+        geneNo += 1
+        if geneNo%1000 == 0:
+            print >> sys.stderr, '...', geneNo, 'finished'
         isoformNum = 0
         for isoforms in clusters[(ref,ID)]:
             cl = sorted(isoforms)
-            if len(cl) == 1:
-                continue
             chromStart = cl[0][1]
             blockStarts = [j[1] - chromStart for j in cl]
             blockSizes = [j[2] - j[1] for j in cl]
@@ -331,6 +333,10 @@ def printBedIsoforms(clusters, genome):
 
             try:
                 frame, startCodon, stopCodon, length = getStartStopCodon(cl, genome)
+                if length <= 30:
+                    continue
+                #print >> sys.stderr, 'startCodon %d, stopCodon %d' % (startCodon, stopCodon)
+                #print >> sys.stderr, 'blockSizess', blockSizes, sum(blockSizes)
             except TypeError:
                 thickStart = chromStart
                 thickEnd = chromEnd
@@ -340,7 +346,8 @@ def printBedIsoforms(clusters, genome):
                 if startCodon < blockSizes[0]:
                     thickStart = chromStart + startCodon
                 else:
-                    for i in range(len(blockSizes)):
+                    for i in range(len(blockSizes)+1):
+                        #print >> sys.stderr, startCodon, sum(blockSizes[:i]), i
                         if startCodon > sum(blockSizes[:i]):
                             continue
                         else:
@@ -501,7 +508,7 @@ def getStartStopCodon(gene, genome):
         while i < len(seq):
             codon = seq[i:i+3]
             if not start:
-                if codon == 'ATG':
+                if codon in ['ATG', 'CTG', 'GTG', 'TTG', 'ATT']:
                     start = True
                     startPos = i
             else:
@@ -529,7 +536,7 @@ def getStartStopCodon(gene, genome):
             if len(codon) < 3:
                 break
             if not start:
-                if codon == 'ATG':
+                if codon in ['ATG', 'CTG', 'GTG', 'TTG', 'ATT']:
                     start = True
                     startPos = i
             else:
@@ -586,7 +593,7 @@ def main():
     print >> sys.stderr, 'Modifying the right end of each transcript..'
     for cl in mergedClusters:
         findLongestEnd(mergedClusters[cl], linkedExons, endExons, exonPositions, ignored)
-    print >> sys.stderr, '\nBuilding gene models..'
+    print >> sys.stderr, '\nConstructing transcripts..'
     allPaths = {}
     gtTenIsoform = 0
     visited = set([])
@@ -602,6 +609,7 @@ def main():
 
     geneModels = buildGeneModels(mergedClusters, exonPositions)
 
+    print >> sys.stderr, '\nFinding open reading frames..\n'
     #print >> sys.stderr, '\nWriting gene models in BED format..\n'
     #print >> sys.stderr, mergedClusters
     #printBedUnigene(geneModels)
