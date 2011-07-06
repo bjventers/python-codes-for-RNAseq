@@ -24,6 +24,9 @@ from pygr import seqdb, sequtil
 from operator import itemgetter
 from string import maketrans
 from Bio.Blast import NCBIWWW, NCBIXML
+from Bio.Seq import Seq
+from Bio.Alphabet import IUPAC
+from Bio.Data import CodonTable
 
 def deleteGap(tName, tStarts, blockSizes):
     '''
@@ -494,53 +497,50 @@ def getStartStopCodon(gene, genome):
         r, start, end = exon 
         seq += str(genome[r][start:end])
 
-    #print >> sys.stderr, 'Doing BLAST (blastx) search against NR...'
-    #readingFrame, alignStart, alignEnd = getReadingFrameBLAST(seq)
-
+    '''Create biopython seqObject'''
+    bioSeq = Seq(seq, IUPAC.unambiguous_dna)
     seqLengths = []
+    
+    '''Define Standard Start/Stop codons'''
+    standardTable = CodonTable.unambiguous_dna_by_name['Standard']
 
-    '''
-        Forward direction.
-    '''
-    for frame in [0,1,2]:
+    ''' Forward direction.'''
+    for frame in range(3):
         i = frame
         start = False
-        while i < len(seq):
-            codon = seq[i:i+3]
+        while True:
+            codon = str(bioSeq[i:i+3])
+            if len(codon) < 3:
+                break
             if not start:
-                if codon in ['ATG', 'CTG', 'GTG', 'TTG', 'ATT']:
+                if codon in standardTable.start_codons:
                     start = True
                     startPos = i
             else:
-                if codon in ['TAG', 'TAA', 'TGA']:
+                if codon in standardTable.stop_codons:
                     seqLengths.append((frame+1, startPos, i+3, i-startPos))
                     i = startPos
                     start = False
             i += 3
 
-    '''
-        Reverse direction.
-    
-    '''
-    complement = maketrans('ACGT', 'TGCA')
-    revSeq = list(seq)
-    revSeq.reverse()
-    revSeq = ''.join(revSeq)
-    revSeq = revSeq.translate(complement)
+    ''' Reverse direction'''
 
-    for frame in [0, 1, 2]:
+    '''Get a reverse complement of bioseq'''
+    bioRevSeq = bioSeq.reverse_complement()
+
+    for frame in range(3):
         i = frame
         start = False
         while True:
-            codon = revSeq[i:i+3]
+            codon = str(bioRevSeq[i:i+3])
             if len(codon) < 3:
                 break
             if not start:
-                if codon in ['ATG', 'CTG', 'GTG', 'TTG', 'ATT']:
+                if codon in standardTable.start_codons:
                     start = True
                     startPos = i
             else:
-                if codon in ['TAG', 'TAA', 'TGA']:
+                if codon in standardTable.stop_codons:
                     seqLengths.append(((frame + 1)*-1, len(seq) - (i+3), len(seq)-startPos, i-startPos))
                     i = startPos
                     start = False
