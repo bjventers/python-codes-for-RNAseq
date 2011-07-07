@@ -22,12 +22,102 @@ import sys
 import csv
 from pygr import seqdb, sequtil
 from operator import itemgetter
-from string import maketrans
+from Bio import SeqIO
 from Bio.Blast import NCBIWWW, NCBIXML
 from Bio.Seq import Seq
-from Bio.Alphabet import IUPAC
+from Bio.Alphabet import IUPAC, generic_protein
 from Bio.Data import CodonTable
+from Bio.SeqRecord import SeqRecord
 
+class Isoform(object):
+    """Isoform object"""
+    def __init__(self, chrom, geneID, isoformID, exons, genome):
+        self.chrom = chrom
+        self.geneID = geneID
+        self.isoformID = isoformID
+        self.exons = sorted(exons)
+        self.chromStart = exons[0][1]
+        self.chromEnd = exons[-1][-1]
+        self.frame, self.startCodon, self.stopCodon, self.length, self.dnaSeq = self.getStartStopCodon(genome)
+        self.mrnaSeq = self.dnaSeq.transcribe()
+        self.orf, self.proteinSeq = self.getProteinSeq()
+        self.strand = '+' if self.frame > 0 else '-'
+
+    def getStartStopCodon(self, genome):
+        seq = ''
+        for exon in self.exons:
+            r, start, end = exon 
+            seq += str(genome[r][start:end])
+
+        '''Create biopython seqObject'''
+        bioSeq = Seq(seq, IUPAC.ambiguous_dna)
+        seqLengths = []
+        
+        '''Define Standard Start/Stop codons'''
+        standardTable = CodonTable.unambiguous_dna_by_name['Standard']
+
+        ''' Forward direction.'''
+        for frame in range(3):
+            i = frame
+            start = False
+            while True:
+                codon = str(bioSeq[i:i+3])
+                if len(codon) < 3:
+                    break
+                if not start:
+                    if codon in standardTable.start_codons:
+                        start = True
+                        startPos = i
+                else:
+                    if codon in standardTable.stop_codons:
+                        seqLengths.append((frame+1, startPos, i+3, i-startPos))
+                        i = startPos
+                        start = False
+                i += 3
+
+        ''' Reverse direction'''
+
+        '''Get a reverse complement of bioseq'''
+        bioRevSeq = bioSeq.reverse_complement()
+
+        for frame in range(3):
+            i = frame
+            start = False
+            while True:
+                codon = str(bioRevSeq[i:i+3])
+                if len(codon) < 3:
+                    break
+                if not start:
+                    if codon in standardTable.start_codons:
+                        start = True
+                        startPos = i
+                else:
+                    if codon in standardTable.stop_codons:
+                        #seqLengths.append(((frame + 1)*-1, len(seq) - (i+3), len(seq)-startPos, i-startPos))
+                        seqLengths.append(((frame+1)*-1, startPos, i+3, i-startPos))
+                        i = startPos
+                        start = False
+                i += 3
+
+        if seqLengths:
+            frame, startCodon, stopCodon, length = sorted(seqLengths, key=lambda x: x[-1])[-1] 
+            if frame > 0:
+                return frame, startCodon, stopCodon, length, bioSeq
+            else:
+                return frame, startCodon, stopCodon, length, bioRevSeq
+        else:
+            return None
+
+    def getProteinSeq(self):
+        orf = self.mrnaSeq[self.startCodon:self.stopCodon]
+        return orf, orf.translate(cds=True)
+
+    def getReferenceBasedStartStopCodon(self):
+        start = len(self.mrnaSeq) - self.stopCodon
+        end = len(self.mrnaSeq) - self.startCodon
+        print >> sys.stderr, 'len(orf) = ', len(self.orf)
+        return start, end
+        
 def deleteGap(tName, tStarts, blockSizes):
     '''
         Delete all small gaps and overlapped exons.
@@ -318,81 +408,64 @@ def printBedUnigene(clusters):
 
     return newBlockStarts, newBlockSizes
 
-def printBedIsoforms(clusters, genome):
+def writeBEDFile(allGenes):
 
-    writer = csv.writer(sys.stdout, dialect='excel-tab')
-    geneNo = 0
-    for ref, ID in clusters:
-        geneNo += 1
-        if geneNo%1000 == 0:
-            print >> sys.stderr, '...', geneNo, 'finished'
-        isoformNum = 0
-        for isoforms in clusters[(ref,ID)]:
-            cl = sorted(isoforms)
-            chromStart = cl[0][1]
-            blockStarts = [j[1] - chromStart for j in cl]
-            blockSizes = [j[2] - j[1] for j in cl]
-            chromEnd = blockStarts[-1] + blockSizes[-1] + chromStart
+    writer = csv.writer(open('models.bed', 'w'), dialect='excel-tab')
+    for chrom in allGenes:
+        for geneID in allGenes[chrom]:
+            for isoform in allGenes[chrom][geneID]:
+                blockStarts = [j[1] - isoform.chromStart for j in isoform.exons]
+                blockSizes = [j[2] - j[1] for j in isoform.exons]
 
-            try:
-                frame, startCodon, stopCodon, length = getStartStopCodon(cl, genome)
-                if length <= 30:
-                    continue
-                #print >> sys.stderr, 'startCodon %d, stopCodon %d' % (startCodon, stopCodon)
-                #print >> sys.stderr, 'blockSizess', blockSizes, sum(blockSizes)
-            except TypeError:
-                thickStart = chromStart
-                thickEnd = chromEnd
-                strand = '.'
-                frame = 'NA'
-            else:
+                if isoform.strand == '+':
+                    startCodon, stopCodon = isoform.startCodon, isoform.stopCodon
+                else:
+                    startCodon, stopCodon = isoform.getReferenceBasedStartStopCodon()
+                    print >> sys.stderr, 'old start, stop codon', isoform.startCodon, isoform.stopCodon
+                    print >> sys.stderr, 'new start, stop codon', startCodon, stopCodon
+
                 if startCodon < blockSizes[0]:
-                    thickStart = chromStart + startCodon
+                    thickStart = isoform.chromStart + startCodon
                 else:
                     for i in range(len(blockSizes)+1):
-                        #print >> sys.stderr, startCodon, sum(blockSizes[:i]), i
                         if startCodon > sum(blockSizes[:i]):
                             continue
                         else:
-                            startCodon = startCodon - sum(blockSizes[:i-1])
-                            thickStart = blockStarts[i-1] + startCodon + chromStart
+                            newStartCodon = startCodon - sum(blockSizes[:i-1])
+                            thickStart = blockStarts[i-1] + newStartCodon + isoform.chromStart
                             break
 
                 if stopCodon > sum(blockSizes[:-1]):
-                    stopCodon = stopCodon - sum(blockSizes[:-1])
-                    thickEnd = blockStarts[-1] + stopCodon + chromStart
+                    newStopCodon = stopCodon - sum(blockSizes[:-1])
+                    thickEnd = blockStarts[-1] + newStopCodon + isoform.chromStart
                 else:
                     for i in range(len(blockSizes)):
                         if stopCodon > sum(blockSizes[:i]):
                             continue
                         else:
-                            stopCodon = stopCodon - sum(blockSizes[:i-1])
-                            thickEnd = blockStarts[i-1] + stopCodon + chromStart
+                            newStopCodon = stopCodon - sum(blockSizes[:i-1])
+                            thickEnd = blockStarts[i-1] + newStopCodon + isoform.chromStart
                             break
 
-                strand = "+" if frame > 0 else "-"
+                blockCount = len(blockStarts)
+                newBlockStarts = [str(i) for i in blockStarts]
+                newBlockSizes = [str(i) for i in blockSizes]
 
-            blockCount = len(blockStarts)
-            newBlockStarts = [str(i) for i in blockStarts]
-            newBlockSizes = [str(i) for i in blockSizes]
-
-            chrom = ref
-            name="%s_%d_%d_frame_%s" % (chrom, ID, isoformNum, str(frame))
-            score=1000
-            itemRgb="0,0,0"
-            writer.writerow((chrom,
-                            chromStart,
-                            chromEnd, 
-                            name,
-                            score,
-                            strand,
-                            thickStart, 
-                            thickEnd,
-                            itemRgb,
-                            blockCount,
-                            ','.join(newBlockSizes),
-                            ','.join(newBlockStarts)))
-            isoformNum += 1
+                name="%s_%d_%d" % (chrom, geneID, isoform.isoformID)
+                score=1000
+                itemRgb="0,0,0"
+                writer.writerow((chrom,
+                                isoform.chromStart,
+                                isoform.chromEnd, 
+                                name,
+                                score,
+                                isoform.strand,
+                                thickStart, 
+                                thickEnd,
+                                itemRgb,
+                                blockCount,
+                                ','.join(newBlockSizes),
+                                ','.join(newBlockStarts)))
 
 def cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored):
     h = 0
@@ -600,25 +673,58 @@ def main():
     for n, cl in enumerate(mergedClusters):
         txExons = sorted(mergedClusters[cl])
         paths = buildPaths(linkedExons, txExons, allPaths, ignored, visited)
-        if len(paths) > 10:
-            gtTenIsoform += 1
         allPaths[cl] = paths
         if n %1000 == 0:
             if n > 0:
                 print >> sys.stderr, '... %d built..' % n
 
-    geneModels = buildGeneModels(mergedClusters, exonPositions)
-
-    print >> sys.stderr, '\nFinding open reading frames..\n'
+    #geneModels = buildGeneModels(mergedClusters, exonPositions)
     #print >> sys.stderr, '\nWriting gene models in BED format..\n'
     #print >> sys.stderr, mergedClusters
     #printBedUnigene(geneModels)
     #getSequenceExonWiseUnigene(geneModels, genome)
     genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
-    printBedIsoforms(allPaths, genome)
     #allSequences = getSequenceExonWiseIsoform(allPaths, genome)
     #checkReadingFrame(allSequences)
-    print >> sys.stderr, '> 10 isoforms = ', gtTenIsoform
+    allGenes = {}
+    isoformDNASeqs = []
+    isoformProteinSeqs = []
+    isoformRNASeqs = []
+    for chrom, geneID in allPaths:
+        isoformID = 0
+        for isoExons in allPaths[(chrom, geneID)]:
+            isoform = Isoform(chrom, geneID, isoformID, isoExons, genome) 
+            if chrom not in allGenes:
+                allGenes[chrom] = {}
+                allGenes[chrom][geneID] = [isoform]
+            else:
+                try:
+                    allGenes[chrom][geneID].append(isoform)
+                except KeyError:
+                    allGenes[chrom][geneID] = [isoform]
+            isoformName = '%s_%d_%d' % (chrom, geneID, isoformID)
+            proteinRecord = SeqRecord(isoform.proteinSeq, id=isoformName,
+                    description=
+                    '''protein sequence from predicted gene models of chickens line 6 & 7''')
+            RNARecord = SeqRecord(isoform.mrnaSeq, id=isoformName,
+                    description=
+                    '''mRNA sequence from predicted gene models of chickens line 6 & 7''')
+            DNARecord = SeqRecord(isoform.dnaSeq, id=isoformName,
+                    description=
+                    '''DNA sequence from predicted gene models of chickens line 6 & 7''')
+            isoformProteinSeqs.append(proteinRecord)
+            isoformRNASeqs.append(RNARecord)
+            isoformDNASeqs.append(DNARecord)
+            isoformID += 1
+    print >> sys.stderr, 'total genes = ', len(allGenes)
+    print >> sys.stderr, 'Writing gene models to file...'
+    writeBEDFile(allGenes)
+    print >> sys.stderr, 'Writing DNA sequences to file...'
+    SeqIO.write(isoformDNASeqs, 'dnas.fa', 'fasta')
+    print >> sys.stderr, 'Writing RNA sequences to file...'
+    SeqIO.write(isoformRNASeqs, 'mrnas.fa', 'fasta')
+    print >> sys.stderr, 'Writing protein sequences to file...'
+    SeqIO.write(isoformProteinSeqs, 'proteins.fa', 'fasta')
 
 if __name__ == '__main__':
     main()
