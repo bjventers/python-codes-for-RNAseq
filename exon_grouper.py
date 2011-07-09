@@ -20,6 +20,7 @@
 import psl_parser
 import sys
 import csv
+from optparse import OptionParser
 from pygr import seqdb, sequtil
 from operator import itemgetter
 from Bio import SeqIO
@@ -28,6 +29,12 @@ from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC, generic_protein
 from Bio.Data import CodonTable
 from Bio.SeqRecord import SeqRecord
+
+'''Setup option parser'''
+parser = OptionParser()
+parser.add_option('-g', '--genome', dest='genome', help='genome sequence', metavar='FILE')
+parser.add_option('-n', '--basename', dest='basename', help='basename for all output files')
+parser.add_option('-i', '--input', dest='infile', help='input file', metavar='FILE')
 
 class Isoform(object):
     """Isoform object"""
@@ -38,19 +45,27 @@ class Isoform(object):
         self.exons = sorted(exons)
         self.chromStart = exons[0][1]
         self.chromEnd = exons[-1][-1]
-        self.frame, self.startCodon, self.stopCodon, self.length, self.dnaSeq = self.getStartStopCodon(genome)
-        self.mrnaSeq = self.dnaSeq.transcribe()
-        self.orf, self.proteinSeq = self.getProteinSeq()
+        self.frame, self.startCodon, self.stopCodon, self.length, self.dnaSeq = self.__getStartStopCodon(genome)
+        self.redundant = False
+
+        if self.frame:
+            self.mrnaSeq = self.dnaSeq.transcribe()
+            self.orf, self.proteinSeq = self.__getProteinSeq()
+        else:
+            self.mrnaSeq = None
+            self.orf = None
+            self.proteinSeq = None
+
         self.strand = '+' if self.frame > 0 else '-'
 
-    def getStartStopCodon(self, genome):
+    def __getStartStopCodon(self, genome):
         seq = ''
         for exon in self.exons:
             r, start, end = exon 
             seq += str(genome[r][start:end])
 
         '''Create biopython seqObject'''
-        bioSeq = Seq(seq, IUPAC.ambiguous_dna)
+        bioSeq = Seq(seq.upper(), IUPAC.ambiguous_dna)
         seqLengths = []
         
         '''Define Standard Start/Stop codons'''
@@ -93,7 +108,6 @@ class Isoform(object):
                         startPos = i
                 else:
                     if codon in standardTable.stop_codons:
-                        #seqLengths.append(((frame + 1)*-1, len(seq) - (i+3), len(seq)-startPos, i-startPos))
                         seqLengths.append(((frame+1)*-1, startPos, i+3, i-startPos))
                         i = startPos
                         start = False
@@ -106,16 +120,18 @@ class Isoform(object):
             else:
                 return frame, startCodon, stopCodon, length, bioRevSeq
         else:
-            return None
+            return (None, None, None, None, bioSeq)
 
-    def getProteinSeq(self):
-        orf = self.mrnaSeq[self.startCodon:self.stopCodon]
-        return orf, orf.translate(cds=True)
+    def __getProteinSeq(self):
+        if self.frame:
+            orf = self.mrnaSeq[self.startCodon:self.stopCodon]
+            return orf, orf.translate(cds=True)
+        else:
+            return None
 
     def getReferenceBasedStartStopCodon(self):
         start = len(self.mrnaSeq) - self.stopCodon
         end = len(self.mrnaSeq) - self.startCodon
-        print >> sys.stderr, 'len(orf) = ', len(self.orf)
         return start, end
         
 def deleteGap(tName, tStarts, blockSizes):
@@ -408,45 +424,49 @@ def printBedUnigene(clusters):
 
     return newBlockStarts, newBlockSizes
 
-def writeBEDFile(allGenes):
-
-    writer = csv.writer(open('models.bed', 'w'), dialect='excel-tab')
+def writeBEDFile(allGenes, basename):
+    writer = csv.writer(open(basename+'.models.bed', 'w'), dialect='excel-tab')
     for chrom in allGenes:
         for geneID in allGenes[chrom]:
             for isoform in allGenes[chrom][geneID]:
+                if isoform.redundant:
+                    continue
                 blockStarts = [j[1] - isoform.chromStart for j in isoform.exons]
                 blockSizes = [j[2] - j[1] for j in isoform.exons]
 
-                if isoform.strand == '+':
-                    startCodon, stopCodon = isoform.startCodon, isoform.stopCodon
-                else:
-                    startCodon, stopCodon = isoform.getReferenceBasedStartStopCodon()
-                    print >> sys.stderr, 'old start, stop codon', isoform.startCodon, isoform.stopCodon
-                    print >> sys.stderr, 'new start, stop codon', startCodon, stopCodon
+                if isoform.frame:
+                    if isoform.strand == '+':
+                        startCodon, stopCodon = isoform.startCodon, isoform.stopCodon
+                    else:
+                        startCodon, stopCodon = isoform.getReferenceBasedStartStopCodon()
 
-                if startCodon < blockSizes[0]:
-                    thickStart = isoform.chromStart + startCodon
-                else:
-                    for i in range(len(blockSizes)+1):
-                        if startCodon > sum(blockSizes[:i]):
-                            continue
-                        else:
-                            newStartCodon = startCodon - sum(blockSizes[:i-1])
-                            thickStart = blockStarts[i-1] + newStartCodon + isoform.chromStart
-                            break
+                    if startCodon < blockSizes[0]:
+                        thickStart = isoform.chromStart + startCodon
+                    else:
+                        for i in range(len(blockSizes)+1):
+                            if startCodon > sum(blockSizes[:i]):
+                                continue
+                            else:
+                                newStartCodon = startCodon - sum(blockSizes[:i-1])
+                                thickStart = blockStarts[i-1] + newStartCodon + isoform.chromStart
+                                break
 
-                if stopCodon > sum(blockSizes[:-1]):
-                    newStopCodon = stopCodon - sum(blockSizes[:-1])
-                    thickEnd = blockStarts[-1] + newStopCodon + isoform.chromStart
+                    if stopCodon > sum(blockSizes[:-1]):
+                        newStopCodon = stopCodon - sum(blockSizes[:-1])
+                        thickEnd = blockStarts[-1] + newStopCodon + isoform.chromStart
+                    else:
+                        for i in range(len(blockSizes)):
+                            if stopCodon > sum(blockSizes[:i]):
+                                continue
+                            else:
+                                newStopCodon = stopCodon - sum(blockSizes[:i-1])
+                                thickEnd = blockStarts[i-1] + newStopCodon + isoform.chromStart
+                                break
                 else:
-                    for i in range(len(blockSizes)):
-                        if stopCodon > sum(blockSizes[:i]):
-                            continue
-                        else:
-                            newStopCodon = stopCodon - sum(blockSizes[:i-1])
-                            thickEnd = blockStarts[i-1] + newStopCodon + isoform.chromStart
-                            break
+                    thickStart = isoform.chromStart
+                    thickEnd = isoform.chromEnd
 
+                strand = isoform.strand if isoform.frame else '.'
                 blockCount = len(blockStarts)
                 newBlockStarts = [str(i) for i in blockStarts]
                 newBlockSizes = [str(i) for i in blockSizes]
@@ -459,7 +479,7 @@ def writeBEDFile(allGenes):
                                 isoform.chromEnd, 
                                 name,
                                 score,
-                                isoform.strand,
+                                strand,
                                 thickStart, 
                                 thickEnd,
                                 itemRgb,
@@ -625,7 +645,22 @@ def getStartStopCodon(gene, genome):
     else:
         return None
 
-def main():
+def findRedundantSequence(allGenes):
+    for chrom in allGenes:
+        for geneID in allGenes[chrom]:
+            for isoform1 in allGenes[chrom][geneID]:
+                if isoform1.redundant:
+                    continue
+                else:
+                    for isoform2 in allGenes[chrom][geneID]:
+                        if isoform1.isoformID == isoform2.isoformID:
+                            continue
+                        else:
+                            if str(isoform1.dnaSeq) == str(isoform2.dnaSeq):
+                                isoform2.redundant = True
+    return None
+
+def main(options, args):
     exons = {}
     clusters = {}
     newClusterID = 0
@@ -634,7 +669,7 @@ def main():
     exonPositions = {}
     endExons = {}
     print >> sys.stderr, 'Parsing and clustering exons..'
-    for alnObj in psl_parser.read(open(sys.argv[1]), 'track'):
+    for alnObj in psl_parser.read(open(options.infile), 'track'):
         tStarts = alnObj.attrib['tStarts']
         blockSizes = alnObj.attrib['blockSizes']
         tName = alnObj.attrib['tName']
@@ -683,13 +718,15 @@ def main():
     #print >> sys.stderr, mergedClusters
     #printBedUnigene(geneModels)
     #getSequenceExonWiseUnigene(geneModels, genome)
-    genome = seqdb.SequenceFileDB(sys.argv[2], verbose=False)
+    genome = seqdb.SequenceFileDB(options.genome, verbose=False)
     #allSequences = getSequenceExonWiseIsoform(allPaths, genome)
     #checkReadingFrame(allSequences)
     allGenes = {}
     isoformDNASeqs = []
     isoformProteinSeqs = []
     isoformRNASeqs = []
+    print >> sys.stderr, 'Searching for ORF...'
+    n = 0
     for chrom, geneID in allPaths:
         isoformID = 0
         for isoExons in allPaths[(chrom, geneID)]:
@@ -703,28 +740,36 @@ def main():
                 except KeyError:
                     allGenes[chrom][geneID] = [isoform]
             isoformName = '%s_%d_%d' % (chrom, geneID, isoformID)
-            proteinRecord = SeqRecord(isoform.proteinSeq, id=isoformName,
-                    description=
-                    '''protein sequence from predicted gene models of chickens line 6 & 7''')
-            RNARecord = SeqRecord(isoform.mrnaSeq, id=isoformName,
-                    description=
-                    '''mRNA sequence from predicted gene models of chickens line 6 & 7''')
             DNARecord = SeqRecord(isoform.dnaSeq, id=isoformName,
                     description=
                     '''DNA sequence from predicted gene models of chickens line 6 & 7''')
-            isoformProteinSeqs.append(proteinRecord)
-            isoformRNASeqs.append(RNARecord)
             isoformDNASeqs.append(DNARecord)
+
+            if isoform.frame:
+                proteinRecord = SeqRecord(isoform.proteinSeq, id=isoformName,
+                        description=
+                        '''protein sequence from predicted gene models of chickens line 6 & 7''')
+                RNARecord = SeqRecord(isoform.mrnaSeq, id=isoformName,
+                        description=
+                        '''mRNA sequence from predicted gene models of chickens line 6 & 7''')
+                isoformProteinSeqs.append(proteinRecord)
+                isoformRNASeqs.append(RNARecord)
+
             isoformID += 1
+            if n > 0 and n%1000 == 0:
+                print >> sys.stderr, '...', n, 'transcripts done.'
+
     print >> sys.stderr, 'total genes = ', len(allGenes)
     print >> sys.stderr, 'Writing gene models to file...'
-    writeBEDFile(allGenes)
+    findRedundantSequence(allGenes)
+    writeBEDFile(allGenes, options.basename)
     print >> sys.stderr, 'Writing DNA sequences to file...'
-    SeqIO.write(isoformDNASeqs, 'dnas.fa', 'fasta')
+    SeqIO.write(isoformDNASeqs, options.basename+'.dnas.fa', 'fasta')
     print >> sys.stderr, 'Writing RNA sequences to file...'
-    SeqIO.write(isoformRNASeqs, 'mrnas.fa', 'fasta')
+    SeqIO.write(isoformRNASeqs, options.basename+'.mrnas.fa', 'fasta')
     print >> sys.stderr, 'Writing protein sequences to file...'
-    SeqIO.write(isoformProteinSeqs, 'proteins.fa', 'fasta')
+    SeqIO.write(isoformProteinSeqs, options.basename+'.proteins.fa', 'fasta')
 
 if __name__ == '__main__':
-    main()
+    (options, args) = parser.parse_args()
+    main(options, args)
