@@ -1,34 +1,38 @@
 #! /usr/local/bin/python
 
+''' This script groups all exons from the same transcript together.
+
+The output is in BED format which can be visualized in UCSC genome browser.
+The script requires the alignment of transcript assembly from
+velvet + oases to the referecne genome.
+The alignment has to be in PSL format from GMAP, BLAT. 
+
+Usage: python exon_grouper.py [transcripts.psl]
+The output is written in a standard output.
+
+The script is written in Python 2.6.6
+
+Author: Likit Preeyanon
+Email: preeyano@msu.edu
+Last update: 13/11/2011
+
 '''
-    This script groups all exons from the same transcript together.
-    The output is in BED format which can be visualized in UCSC genome browser.
-    The script requires the alignment of transcript assembly from
-    velvet + oases to the referecne genome.
-    The alignment has to be in PSL format from GMAP, BLAT. 
 
-    Usage: python exon_grouper.py [transcripts.psl]
-    The output is written in a standard output.
-
-    The script is written in Python 2.6.6
-
-    Author: Likit Preeyanon
-    Email: preeyano@msu.edu
-    Last update: 13/11/2011
-'''
-
-import psl_parser
 import sys
 import csv
+import sqlite3
 from optparse import OptionParser
-from pygr import seqdb, sequtil
 from operator import itemgetter
+
+from pygr import seqdb
 from Bio import SeqIO
 from Bio.Blast import NCBIWWW, NCBIXML
 from Bio.Seq import Seq
-from Bio.Alphabet import IUPAC, generic_protein
+from Bio.Alphabet import IUPAC
 from Bio.Data import CodonTable
 from Bio.SeqRecord import SeqRecord
+
+import psl_parser
 
 '''Setup option parser'''
 parser = OptionParser()
@@ -488,6 +492,7 @@ def writeBEDFile(allGenes, basename):
                                 ','.join(newBlockStarts)))
 
 def cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored):
+    UTRLENGTH = 100
     h = 0
     keys = sorted(allExons, key=itemgetter(2,1)) # sort by End then by Start.
     curRef, curStart, curEnd = keys[0]
@@ -507,7 +512,7 @@ def cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored):
                             curPosition = exonPositions[(curRef, curStart, curEnd)]
                             curLinkedExons = linkedExons[(curRef, curStart, curEnd)]
                             if nextPosition == 0 and curPosition == -1:
-                                if nextStart - curStart < 20:
+                                if nextStart - curStart < UTRLENGTH:
                                     linkedExons[(nextRef, nextStart, nextEnd)] = \
                                     linkedExons[(nextRef, nextStart, nextEnd)].union(curLinkedExons)
                                     ignored.add((curRef, curStart, curEnd))
@@ -523,7 +528,6 @@ def cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored):
     h = 0
     keys = sorted(allExons, key=itemgetter(1,2)) # sort by Start then End.
     curRef, curStart, curEnd = keys[h]
-    secondLastExons = set([])
     while True:
         h += 1
         #if (curRef, curStart, curEnd) not in ignored:
@@ -545,7 +549,7 @@ def cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored):
                             ignored.add((curRef, curStart, curEnd))
                             curRef, curStart, curEnd = keys[h]
                         elif nextPosition == 1 and curPosition == 0:
-                            if nextEnd - curEnd < 20:
+                            if nextEnd - curEnd < UTRLENGTH:
                                 linkedExons[(curRef, curStart, curEnd)] = \
                                 linkedExons[(curRef, curStart, curEnd)].union(nextLinkedExons)
                                 ignored.add((nextRef, nextStart, nextEnd))
@@ -566,6 +570,7 @@ def cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored):
     '''
 
 def getReadingFrameBLAST(seq):
+    '''Deprecated'''
 
     result = NCBIWWW.qblast('blastx', 'nr', seq)
     blastRecord = NCBIXML.read(result)
@@ -660,6 +665,26 @@ def findRedundantSequence(allGenes):
                                 isoform2.redundant = True
     return None
 
+
+def saveToDB(allGenes):
+    conn = sqlite3.connect('geneModels')
+    cursor = conn.cursor()
+
+    cursor.execute('''
+                    create table models (
+                    isoformID varchar,
+                    chrom varchar,
+                    chromStart integer,
+                    chromEnd integer,
+                    cdsStart integer,
+                    cdsEnd integer,
+                    strand varchar,
+                    exonStarts varchar,
+                    exonEnds varchar)
+                    ''')
+    cursor.execute('''create index isoformID on models (isoformID)''')
+
+
 def main(options, args):
     exons = {}
     clusters = {}
@@ -721,10 +746,12 @@ def main(options, args):
     genome = seqdb.SequenceFileDB(options.genome, verbose=False)
     #allSequences = getSequenceExonWiseIsoform(allPaths, genome)
     #checkReadingFrame(allSequences)
+
+    '''Create isoform objects from allPaths and
+    search for ORF.
+
+    '''
     allGenes = {}
-    isoformDNASeqs = []
-    isoformProteinSeqs = []
-    isoformRNASeqs = []
     print >> sys.stderr, 'Searching for ORF...'
     n = 0
     for chrom, geneID in allPaths:
@@ -739,29 +766,40 @@ def main(options, args):
                     allGenes[chrom][geneID].append(isoform)
                 except KeyError:
                     allGenes[chrom][geneID] = [isoform]
-            isoformName = '%s_%d_%d' % (chrom, geneID, isoformID)
-            DNARecord = SeqRecord(isoform.dnaSeq, id=isoformName,
-                    description=
-                    '''DNA sequence from predicted gene models of chickens line 6 & 7''')
-            isoformDNASeqs.append(DNARecord)
-
-            if isoform.frame:
-                proteinRecord = SeqRecord(isoform.proteinSeq, id=isoformName,
-                        description=
-                        '''protein sequence from predicted gene models of chickens line 6 & 7''')
-                RNARecord = SeqRecord(isoform.mrnaSeq, id=isoformName,
-                        description=
-                        '''mRNA sequence from predicted gene models of chickens line 6 & 7''')
-                isoformProteinSeqs.append(proteinRecord)
-                isoformRNASeqs.append(RNARecord)
-
             isoformID += 1
-            if n > 0 and n%1000 == 0:
-                print >> sys.stderr, '...', n, 'transcripts done.'
+
+    print >> sys.stderr, 'Removing redundant sequences..'
+    findRedundantSequence(allGenes)
+
+    '''Creating sequence records for each DNA, RNA and protein sequences.'''
+    isoformDNASeqs = []
+    isoformProteinSeqs = []
+    isoformRNASeqs = []
+    for chrom in allGenes:
+        for geneID in allGenes[chrom]:
+            isoformID = 0
+            for isoform in allGenes[chrom][geneID]:
+                if not isoform.redundant:
+                    isoform.isoformID = isoformID
+                    isoformName = '%s_%d_%d' % (chrom, geneID, isoform.isoformID)
+                    DNARecord = SeqRecord(isoform.dnaSeq, id=isoformName,
+                            description='DNA sequence from predicted gene models of chickens line 6 & 7')
+                    isoformDNASeqs.append(DNARecord)
+
+                    if isoform.frame:
+                        proteinRecord = SeqRecord(isoform.proteinSeq, id=isoformName,
+                                description='protein sequence from predicted gene models of chickens line 6 & 7')
+                        RNARecord = SeqRecord(isoform.mrnaSeq, id=isoformName,
+                                description='mRNA sequence from predicted gene models of chickens line 6 & 7')
+                        isoformProteinSeqs.append(proteinRecord)
+                        isoformRNASeqs.append(RNARecord)
+                        isoformID += 1
+
+                if n > 0 and n%1000 == 0:
+                    print >> sys.stderr, '...', n, 'transcripts done.'
 
     print >> sys.stderr, 'total genes = ', len(allGenes)
     print >> sys.stderr, 'Writing gene models to file...'
-    findRedundantSequence(allGenes)
     writeBEDFile(allGenes, options.basename)
     print >> sys.stderr, 'Writing DNA sequences to file...'
     SeqIO.write(isoformDNASeqs, options.basename+'.dnas.fa', 'fasta')
