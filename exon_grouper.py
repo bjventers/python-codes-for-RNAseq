@@ -5,7 +5,7 @@
 The output is in BED format which can be visualized in UCSC genome browser.
 The script requires the alignment of transcript assembly from
 velvet + oases to the referecne genome.
-The alignment has to be in PSL format from GMAP, BLAT. 
+The alignment has to be in PSL format from GMAP, BLAT.
 
 Usage: python exon_grouper.py [transcripts.psl]
 The output is written in a standard output.
@@ -36,9 +36,16 @@ import psl_parser
 
 '''Setup option parser'''
 parser = OptionParser()
-parser.add_option('-g', '--genome', dest='genome', help='genome sequence', metavar='FILE')
-parser.add_option('-n', '--basename', dest='basename', help='basename for all output files')
-parser.add_option('-i', '--input', dest='infile', help='input file', metavar='FILE')
+parser.add_option('-g', '--genome', dest='genome',
+                    help='genome sequence', metavar='FILE')
+parser.add_option('-n', '--basename', dest='basename',
+                    help='basename for all output files')
+parser.add_option('-i', '--input', dest='infile',
+                    help='input file', metavar='FILE')
+parser.add_option('-u', '--MINIMUM_UTR_LENGTH', dest='minimumUTRLength',
+                    type='int',
+                    help='minimum number of bases to be considerd UTR.')
+
 
 class Isoform(object):
     """Isoform object"""
@@ -49,7 +56,8 @@ class Isoform(object):
         self.exons = sorted(exons)
         self.chromStart = exons[0][1]
         self.chromEnd = exons[-1][-1]
-        self.frame, self.startCodon, self.stopCodon, self.length, self.dnaSeq = self.__getStartStopCodon(genome)
+        self.frame, self.startCodon, self.stopCodon, \
+                self.length, self.dnaSeq = self.__getStartStopCodon(genome)
         self.redundant = False
 
         if self.frame:
@@ -65,13 +73,13 @@ class Isoform(object):
     def __getStartStopCodon(self, genome):
         seq = ''
         for exon in self.exons:
-            r, start, end = exon 
+            r, start, end = exon
             seq += str(genome[r][start:end])
 
         '''Create biopython seqObject'''
         bioSeq = Seq(seq.upper(), IUPAC.ambiguous_dna)
         seqLengths = []
-        
+
         '''Define Standard Start/Stop codons'''
         standardTable = CodonTable.unambiguous_dna_by_name['Standard']
 
@@ -80,7 +88,7 @@ class Isoform(object):
             i = frame
             start = False
             while True:
-                codon = str(bioSeq[i:i+3])
+                codon = str(bioSeq[i:i + 3])
                 if len(codon) < 3:
                     break
                 if not start:
@@ -89,7 +97,8 @@ class Isoform(object):
                         startPos = i
                 else:
                     if codon in standardTable.stop_codons:
-                        seqLengths.append((frame+1, startPos, i+3, i-startPos))
+                        seqLengths.append((frame + 1, startPos,
+                                            i + 3, i - startPos))
                         i = startPos
                         start = False
                 i += 3
@@ -103,7 +112,7 @@ class Isoform(object):
             i = frame
             start = False
             while True:
-                codon = str(bioRevSeq[i:i+3])
+                codon = str(bioRevSeq[i:i + 3])
                 if len(codon) < 3:
                     break
                 if not start:
@@ -112,13 +121,16 @@ class Isoform(object):
                         startPos = i
                 else:
                     if codon in standardTable.stop_codons:
-                        seqLengths.append(((frame+1)*-1, startPos, i+3, i-startPos))
+                        seqLengths.append(((frame + 1) * -1,
+                                            startPos, i + 3,
+                                            i - startPos))
                         i = startPos
                         start = False
                 i += 3
 
         if seqLengths:
-            frame, startCodon, stopCodon, length = sorted(seqLengths, key=lambda x: x[-1])[-1] 
+            frame, startCodon, stopCodon, length \
+                    = sorted(seqLengths, key=lambda x: x[-1])[-1]
             if frame > 0:
                 return frame, startCodon, stopCodon, length, bioSeq
             else:
@@ -137,7 +149,8 @@ class Isoform(object):
         start = len(self.mrnaSeq) - self.stopCodon
         end = len(self.mrnaSeq) - self.startCodon
         return start, end
-        
+
+
 def deleteGap(tName, tStarts, blockSizes):
     '''
         Delete all small gaps and overlapped exons.
@@ -145,10 +158,11 @@ def deleteGap(tName, tStarts, blockSizes):
 
     exonSet = []
     i = 0
-    ref, start ,end = tName, tStarts[0], tStarts[0]+blockSizes[0]
-    while i < range(len(tStarts)): 
+    ref, start, end = tName, tStarts[0], tStarts[0] + blockSizes[0]
+    while i < range(len(tStarts)):
         try:
-            ref, nextStart, nextEnd = tName, tStarts[i+1], tStarts[i+1]+blockSizes[i+1]
+            ref, nextStart, nextEnd = tName, tStarts[i + 1], \
+                                        tStarts[i + 1] + blockSizes[i + 1]
         except IndexError:
             exonSet.append((tName, start, end))
             break
@@ -160,6 +174,7 @@ def deleteGap(tName, tStarts, blockSizes):
                 start, end = nextStart, nextEnd
         i += 1
     return exonSet
+
 
 def findLongestEnd(allExons, linkedExons, endExons, exonPositions, ignored):
     allExons = sorted(allExons, reverse=True)
@@ -180,9 +195,9 @@ def findLongestEnd(allExons, linkedExons, endExons, exonPositions, ignored):
                     change.append((nextRef, nextStart, nextEnd))
             else:
                 for c in change:
-                    secondLastExon = endExons[c] 
+                    secondLastExon = endExons[c]
                     linkedExons[secondLastExon].add((curRef, curStart, curEnd))
-                    #print c, linkedExons[c], '-->', curRef, curStart, curEnd, '-->', secondLastExon, linkedExons[secondLastExon]
+
 
 def construct(tName, tStarts, blockSizes, exons,
                 clusters, newClusterID, clusterConnections,
@@ -199,17 +214,21 @@ def construct(tName, tStarts, blockSizes, exons,
     for i in range(len(exonSet)):
         tName, start, end = exonSet[i]
         try:
-            tName, juncExonStart, juncExonEnd = exonSet[i+1]
+            tName, juncExonStart, juncExonEnd = exonSet[i + 1]
             try:
-                linkedExons[(tName, start, end)].add((tName, juncExonStart, juncExonEnd))
+                linkedExons[(tName, start, end)].add((tName,
+                                                    juncExonStart,
+                                                    juncExonEnd))
             except KeyError:
-                linkedExons[(tName, start, end)] = set([(tName, juncExonStart, juncExonEnd)])
+                linkedExons[(tName, start, end)] = set([(tName,
+                                                        juncExonStart,
+                                                        juncExonEnd)])
         except IndexError:
             try:
                 allLinks = linkedExons[(tName, start, end)]
             except KeyError:
                 linkedExons[(tName, start, end)] = set([])
-                endExons[(tName, start, end)] = exonSet[i-1]
+                endExons[(tName, start, end)] = exonSet[i - 1]
 
         exonGroup.add((tName, start, end))
 
@@ -224,13 +243,13 @@ def construct(tName, tStarts, blockSizes, exons,
         except KeyError:
             if i == 0:
                 exonPositions[(tName, start, end)] = -1
-            elif i == len(exonSet)-1:
+            elif i == len(exonSet) - 1:
                 exonPositions[(tName, start, end)] = 1
             else:
                 exonPositions[(tName, start, end)] = 0
         else:
             pass
-    ''' 
+    '''
         If at least one exon connects to an existing cluster,
         add all new exons to that cluster and exons database.
     '''
@@ -266,6 +285,7 @@ def construct(tName, tStarts, blockSizes, exons,
 
     return newClusterID
 
+
 def walk(allExons, nodes, clusters, clusterConnections, visited):
 
     ''' This function walks over all clusters connected to
@@ -279,8 +299,11 @@ def walk(allExons, nodes, clusters, clusterConnections, visited):
                 visited.append(n)
                 allExons = allExons.union(clusters[n])
                 nodes = clusterConnections[n]
-                allExons = walk(allExons, nodes, clusters, clusterConnections, visited)
+                allExons = walk(allExons, nodes,
+                            clusters, clusterConnections,
+                            visited)
     return allExons
+
 
 def mergeClusters(clusters, clusterConnections):
 
@@ -295,11 +318,14 @@ def mergeClusters(clusters, clusterConnections):
             visited.append(c)
             allExons = clusters[c]
             nodes = clusterConnections[c]
-            allExons = walk(allExons, nodes, clusters, clusterConnections, visited) 
+            allExons = walk(allExons, nodes,
+                            clusters, clusterConnections,
+                            visited)
             mergedClusters[c] = allExons
-        if i%1000 == 0:
+        if i % 1000 == 0:
             print >> sys.stderr, '...', i, 'merged..'
     return mergedClusters
+
 
 def walkFork(nodes, linkedExons, passed, paths, visited, ignored, txExons):
     nodes = sorted(nodes)
@@ -307,7 +333,7 @@ def walkFork(nodes, linkedExons, passed, paths, visited, ignored, txExons):
         while nodes:
             direction = nodes.pop()
             visited.add(direction)
-            if direction not in ignored: 
+            if direction not in ignored:
                 passed.append(direction)
                 walkFork(linkedExons[direction],
                                     linkedExons,
@@ -319,6 +345,7 @@ def walkFork(nodes, linkedExons, passed, paths, visited, ignored, txExons):
                 passed.pop()
     else:
         paths.append(passed[:])
+
 
 def buildPaths(linkedExons, txExons, allPaths, ignored, visited):
     paths = []
@@ -334,11 +361,12 @@ def buildPaths(linkedExons, txExons, allPaths, ignored, visited):
                                         )
     return paths
 
+
 def buildGeneModels(mergedClusters, exonPositions):
 
     geneModels = {}
     for cluster in mergedClusters:
-        connectedExons = sorted(mergedClusters[cluster], key=itemgetter(1,2))
+        connectedExons = sorted(mergedClusters[cluster], key=itemgetter(1, 2))
         cleanedConExons = []
         ref, exonStart, exonEnd = connectedExons[0]
         exonPosition = exonPositions[(ref, exonStart, exonEnd)]
@@ -350,12 +378,12 @@ def buildGeneModels(mergedClusters, exonPositions):
                 if nextExonPosition > -1:
                     exonStart, exonEnd = nextExonStart, nextExonEnd
                 else:
-                    if not exonPosition > -1: # exonPosition == -1?
+                    if not exonPosition > -1:  # exonPosition == -1?
                         exonStart, exonEnd = nextExonStart, nextExonEnd
             else:
-                if nextExonStart-exonEnd >=30:
+                if nextExonStart - exonEnd >= 30:
                     cleanedConExons.append((ref, exonStart, exonEnd))
-                    exonStart, exonEnd = nextExonStart, nextExonEnd 
+                    exonStart, exonEnd = nextExonStart, nextExonEnd
                     exonPosition = nextExonPosition
                 else:
                     if exonEnd < nextExonEnd:
@@ -368,6 +396,7 @@ def buildGeneModels(mergedClusters, exonPositions):
 
     return geneModels
 
+
 def getSequenceExonWiseIsoform(allPaths, genome):
     allSequences = {}
     sequences = []
@@ -375,12 +404,13 @@ def getSequenceExonWiseIsoform(allPaths, genome):
         for gene in allPaths[cl]:
             seq = ''
             for exon in gene:
-                r, start, end = exon 
+                r, start, end = exon
                 seq += str(genome[r][start:end])
             sequences.append(seq)
             print '>%s:%d:%d\n%s' % (r, start, end, seq)
         allSequences[cl] = sequences
     return allSequences
+
 
 def getSequenceExonWiseUnigene(allPaths, genome):
     for cl in allPaths:
@@ -391,14 +421,15 @@ def getSequenceExonWiseUnigene(allPaths, genome):
         lastEnd = allExons[-1][-1]
         print '>%s:%d:%d' % (ref, firstStart, lastEnd)
         for exon in allPaths[cl]:
-            r, start, end = exon 
+            r, start, end = exon
             print str(genome[r][start:end])
+
 
 def printBedUnigene(clusters):
 
     writer = csv.writer(sys.stdout, dialect='excel-tab')
     for ref, ID in clusters:
-        cl = sorted(clusters[(ref,ID)])
+        cl = sorted(clusters[(ref, ID)])
         transcriptNumber = ID
         chromStart = cl[0][1]
         blockStarts = [j[1] - chromStart for j in cl]
@@ -409,17 +440,17 @@ def printBedUnigene(clusters):
         newBlockStarts = [str(i) for i in blockStarts]
         newBlockSizes = [str(i) for i in blockSizes]
         chrom = ref
-        name="%s_%d" % (chrom, transcriptNumber)
+        name = "%s_%d" % (chrom, transcriptNumber)
         strand = "+"
-        score=1000
-        itemRgb="0,0,0"
+        score = 1000
+        itemRgb = "0,0,0"
         writer.writerow((chrom,
                         chromStart,
-                        chromEnd, 
+                        chromEnd,
                         name,
                         score,
                         strand,
-                        chromStart, 
+                        chromStart,
                         chromEnd,
                         itemRgb,
                         blockCount,
@@ -428,43 +459,57 @@ def printBedUnigene(clusters):
 
     return newBlockStarts, newBlockSizes
 
+
 def writeBEDFile(allGenes, basename):
-    writer = csv.writer(open(basename+'.models.bed', 'w'), dialect='excel-tab')
+    writer = csv.writer(open(basename + '.models.bed', 'w'),
+                        dialect='excel-tab')
     for chrom in allGenes:
         for geneID in allGenes[chrom]:
             for isoform in allGenes[chrom][geneID]:
                 if isoform.redundant:
                     continue
-                blockStarts = [j[1] - isoform.chromStart for j in isoform.exons]
+                if isoform.mrnaSeq and len(isoform.mrnaSeq) < 300:
+                    continue
+                blockStarts = [j[1] - isoform.chromStart \
+                                    for j in isoform.exons]
                 blockSizes = [j[2] - j[1] for j in isoform.exons]
 
                 if isoform.frame:
                     if isoform.strand == '+':
-                        startCodon, stopCodon = isoform.startCodon, isoform.stopCodon
+                        startCodon, stopCodon = isoform.startCodon, \
+                                                isoform.stopCodon
                     else:
-                        startCodon, stopCodon = isoform.getReferenceBasedStartStopCodon()
+                        startCodon, stopCodon = \
+                            isoform.getReferenceBasedStartStopCodon()
 
                     if startCodon < blockSizes[0]:
                         thickStart = isoform.chromStart + startCodon
                     else:
-                        for i in range(len(blockSizes)+1):
+                        for i in range(len(blockSizes) + 1):
                             if startCodon > sum(blockSizes[:i]):
                                 continue
                             else:
-                                newStartCodon = startCodon - sum(blockSizes[:i-1])
-                                thickStart = blockStarts[i-1] + newStartCodon + isoform.chromStart
+                                newStartCodon = startCodon - \
+                                        sum(blockSizes[:i - 1])
+                                thickStart = blockStarts[i - 1] \
+                                        + newStartCodon + isoform.chromStart
                                 break
 
                     if stopCodon > sum(blockSizes[:-1]):
                         newStopCodon = stopCodon - sum(blockSizes[:-1])
-                        thickEnd = blockStarts[-1] + newStopCodon + isoform.chromStart
+                        thickEnd = blockStarts[-1] + \
+                                    newStopCodon + \
+                                    isoform.chromStart
                     else:
                         for i in range(len(blockSizes)):
                             if stopCodon > sum(blockSizes[:i]):
                                 continue
                             else:
-                                newStopCodon = stopCodon - sum(blockSizes[:i-1])
-                                thickEnd = blockStarts[i-1] + newStopCodon + isoform.chromStart
+                                newStopCodon = stopCodon - \
+                                                sum(blockSizes[:i - 1])
+                                thickEnd = blockStarts[i - 1] + \
+                                            newStopCodon + \
+                                            isoform.chromStart
                                 break
                 else:
                     thickStart = isoform.chromStart
@@ -475,26 +520,28 @@ def writeBEDFile(allGenes, basename):
                 newBlockStarts = [str(i) for i in blockStarts]
                 newBlockSizes = [str(i) for i in blockSizes]
 
-                name="%s_%d_%d" % (chrom, geneID, isoform.isoformID)
-                score=1000
-                itemRgb="0,0,0"
+                name = "%s_%d_%d" % (chrom, geneID, isoform.isoformID)
+                score = 1000
+                itemRgb = "0,0,0"
                 writer.writerow((chrom,
                                 isoform.chromStart,
-                                isoform.chromEnd, 
+                                isoform.chromEnd,
                                 name,
                                 score,
                                 strand,
-                                thickStart, 
+                                thickStart,
                                 thickEnd,
                                 itemRgb,
                                 blockCount,
                                 ','.join(newBlockSizes),
                                 ','.join(newBlockStarts)))
 
-def cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored):
-    UTRLENGTH = 100
+
+def cleanUpLinkedExons(allExons, linkedExons,
+                        exonPositions, ignored,
+                        minimumUTRLength=100):
     h = 0
-    keys = sorted(allExons, key=itemgetter(2,1)) # sort by End then by Start.
+    keys = sorted(allExons, key=itemgetter(2, 1))  # sort by End then by Start.
     curRef, curStart, curEnd = keys[0]
     while True:
         h += 1
@@ -509,24 +556,38 @@ def cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored):
                 if curRef == nextRef:
                     if curEnd == nextEnd:
                         if curStart < nextStart:
-                            curPosition = exonPositions[(curRef, curStart, curEnd)]
-                            curLinkedExons = linkedExons[(curRef, curStart, curEnd)]
+                            curPosition = exonPositions[(curRef,
+                                                        curStart,
+                                                        curEnd)]
+                            curLinkedExons = linkedExons[(curRef,
+                                                        curStart,
+                                                        curEnd)]
                             if nextPosition == 0 and curPosition == -1:
-                                if nextStart - curStart < UTRLENGTH:
-                                    linkedExons[(nextRef, nextStart, nextEnd)] = \
-                                    linkedExons[(nextRef, nextStart, nextEnd)].union(curLinkedExons)
+                                if nextStart - curStart < minimumUTRLength:
+                                    linkedExons[(nextRef,
+                                                nextStart,
+                                                nextEnd)] = \
+                                    linkedExons[(nextRef,
+                                                nextStart,
+                                                nextEnd)].union(curLinkedExons)
                                     ignored.add((curRef, curStart, curEnd))
                                     curRef, curStart, curEnd = keys[h]
                             elif curPosition == 0 and nextPosition == 0:
                                 pass
-                            else: 
-                                linkedExons[(curRef, curStart, curEnd)] = \
-                                linkedExons[(curRef, curStart, curEnd)].union(nextLinkedExons)
-                                ignored.add((nextRef, nextStart, nextEnd))
+                            else:
+                                linkedExons[(curRef,
+                                            curStart,
+                                            curEnd)] = \
+                                linkedExons[(curRef,
+                                            curStart,
+                                            curEnd)].union(nextLinkedExons)
+                                ignored.add((nextRef,
+                                            nextStart,
+                                            nextEnd))
                     else:
                         curRef, curStart, curEnd = keys[h]
     h = 0
-    keys = sorted(allExons, key=itemgetter(1,2)) # sort by Start then End.
+    keys = sorted(allExons, key=itemgetter(1, 2))  # sort by Start then End.
     curRef, curStart, curEnd = keys[h]
     while True:
         h += 1
@@ -541,17 +602,29 @@ def cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored):
             if curRef == nextRef:
                 if curStart == nextStart:
                     if curEnd < nextEnd:
-                        curPosition = exonPositions[(curRef, curStart, curEnd)]
-                        curLinkedExons = linkedExons[(curRef, curStart, curEnd)]
+                        curPosition = exonPositions[(curRef,
+                                                    curStart,
+                                                    curEnd)]
+                        curLinkedExons = linkedExons[(curRef,
+                                                    curStart,
+                                                    curEnd)]
                         if nextPosition == 0 and curPosition == 1:
-                            linkedExons[(nextRef, nextStart, nextEnd)] = \
-                            linkedExons[(nextRef, nextStart, nextEnd)].union(curLinkedExons)
+                            linkedExons[(nextRef,
+                                        nextStart,
+                                        nextEnd)] = \
+                            linkedExons[(nextRef,
+                                        nextStart,
+                                        nextEnd)].union(curLinkedExons)
                             ignored.add((curRef, curStart, curEnd))
                             curRef, curStart, curEnd = keys[h]
                         elif nextPosition == 1 and curPosition == 0:
-                            if nextEnd - curEnd < UTRLENGTH:
-                                linkedExons[(curRef, curStart, curEnd)] = \
-                                linkedExons[(curRef, curStart, curEnd)].union(nextLinkedExons)
+                            if nextEnd - curEnd < minimumUTRLength:
+                                linkedExons[(curRef,
+                                            curStart,
+                                            curEnd)] = \
+                                linkedExons[(curRef,
+                                            curStart,
+                                            curEnd)].union(nextLinkedExons)
                                 ignored.add((nextRef, nextStart, nextEnd))
                             else:
                                 curRef, curStart, curEnd = keys[h]
@@ -568,6 +641,7 @@ def cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored):
         else:
             print >> sys.stderr, '\n'
     '''
+
 
 def getReadingFrameBLAST(seq):
     '''Deprecated'''
@@ -589,16 +663,17 @@ def getReadingFrameBLAST(seq):
         break
     return hsp.frame[0], hsp.query_start, hsp.query_end
 
+
 def getStartStopCodon(gene, genome):
     seq = ''
     for exon in gene:
-        r, start, end = exon 
+        r, start, end = exon
         seq += str(genome[r][start:end])
 
     '''Create biopython seqObject'''
     bioSeq = Seq(seq, IUPAC.unambiguous_dna)
     seqLengths = []
-    
+
     '''Define Standard Start/Stop codons'''
     standardTable = CodonTable.unambiguous_dna_by_name['Standard']
 
@@ -607,7 +682,7 @@ def getStartStopCodon(gene, genome):
         i = frame
         start = False
         while True:
-            codon = str(bioSeq[i:i+3])
+            codon = str(bioSeq[i:i + 3])
             if len(codon) < 3:
                 break
             if not start:
@@ -616,7 +691,9 @@ def getStartStopCodon(gene, genome):
                     startPos = i
             else:
                 if codon in standardTable.stop_codons:
-                    seqLengths.append((frame+1, startPos, i+3, i-startPos))
+                    seqLengths.append((frame + 1,
+                                        startPos, i + 3,
+                                        i - startPos))
                     i = startPos
                     start = False
             i += 3
@@ -630,7 +707,7 @@ def getStartStopCodon(gene, genome):
         i = frame
         start = False
         while True:
-            codon = str(bioRevSeq[i:i+3])
+            codon = str(bioRevSeq[i:i + 3])
             if len(codon) < 3:
                 break
             if not start:
@@ -639,16 +716,21 @@ def getStartStopCodon(gene, genome):
                     startPos = i
             else:
                 if codon in standardTable.stop_codons:
-                    seqLengths.append(((frame + 1)*-1, len(seq) - (i+3), len(seq)-startPos, i-startPos))
+                    seqLengths.append(((frame + 1) * -1,
+                                        len(seq) - (i + 3),
+                                        len(seq) - startPos,
+                                        i - startPos))
                     i = startPos
                     start = False
             i += 3
 
     if seqLengths:
-        frame, startCodon, stopCodon, length = sorted(seqLengths, key=lambda x: x[-1])[-1]
+        frame, startCodon, stopCodon, length = \
+                sorted(seqLengths, key=lambda x: x[-1])[-1]
         return sorted(seqLengths, key=lambda x: x[-1])[-1]
     else:
         return None
+
 
 def findRedundantSequence(allGenes):
     for chrom in allGenes:
@@ -693,6 +775,7 @@ def main(options, args):
     linkedExons = {}
     exonPositions = {}
     endExons = {}
+    print >> sys.stderr, 'Minimum UTR length = ', options.minimumUTRLength
     print >> sys.stderr, 'Parsing and clustering exons..'
     for alnObj in psl_parser.read(open(options.infile), 'track'):
         tStarts = alnObj.attrib['tStarts']
@@ -721,11 +804,19 @@ def main(options, args):
     ignored = set([])
     for cl in mergedClusters:
         allExons = mergedClusters[cl]
-        cleanUpLinkedExons(allExons, linkedExons, exonPositions, ignored)
+        cleanUpLinkedExons(allExons,
+                            linkedExons,
+                            exonPositions,
+                            ignored,
+                            options.minimumUTRLength)
 
     print >> sys.stderr, 'Modifying the right end of each transcript..'
     for cl in mergedClusters:
-        findLongestEnd(mergedClusters[cl], linkedExons, endExons, exonPositions, ignored)
+        findLongestEnd(mergedClusters[cl],
+                        linkedExons,
+                        endExons,
+                        exonPositions,
+                        ignored)
     print >> sys.stderr, '\nConstructing transcripts..'
     allPaths = {}
     gtTenIsoform = 0
@@ -734,7 +825,7 @@ def main(options, args):
         txExons = sorted(mergedClusters[cl])
         paths = buildPaths(linkedExons, txExons, allPaths, ignored, visited)
         allPaths[cl] = paths
-        if n %1000 == 0:
+        if n % 1000 == 0:
             if n > 0:
                 print >> sys.stderr, '... %d built..' % n
 
@@ -757,7 +848,7 @@ def main(options, args):
     for chrom, geneID in allPaths:
         isoformID = 0
         for isoExons in allPaths[(chrom, geneID)]:
-            isoform = Isoform(chrom, geneID, isoformID, isoExons, genome) 
+            isoform = Isoform(chrom, geneID, isoformID, isoExons, genome)
             if chrom not in allGenes:
                 allGenes[chrom] = {}
                 allGenes[chrom][geneID] = [isoform]
@@ -781,32 +872,50 @@ def main(options, args):
             for isoform in allGenes[chrom][geneID]:
                 if not isoform.redundant:
                     isoform.isoformID = isoformID
-                    isoformName = '%s_%d_%d' % (chrom, geneID, isoform.isoformID)
-                    DNARecord = SeqRecord(isoform.dnaSeq, id=isoformName,
-                            description='DNA sequence from predicted gene models of chickens line 6 & 7')
+                    isoformName = '%s_%d_%d' % (chrom,
+                                                geneID,
+                                                isoform.isoformID)
+                    DNARecord = SeqRecord(isoform.dnaSeq,
+                                            id=isoformName,
+                                            description='''
+                                            DNA sequence from predicted
+                                            gene models of chickens line
+                                            6 & 7
+                                            ''')
                     isoformDNASeqs.append(DNARecord)
 
                     if isoform.frame:
-                        proteinRecord = SeqRecord(isoform.proteinSeq, id=isoformName,
-                                description='protein sequence from predicted gene models of chickens line 6 & 7')
-                        RNARecord = SeqRecord(isoform.mrnaSeq, id=isoformName,
-                                description='mRNA sequence from predicted gene models of chickens line 6 & 7')
+                        proteinRecord = SeqRecord(isoform.proteinSeq,
+                                                    id=isoformName,
+                                                    description='''
+                                                    protein sequence
+                                                    from predicted
+                                                    gene models of
+                                                    chickens line 6 & 7
+                                                    ''')
+                        RNARecord = SeqRecord(isoform.mrnaSeq,
+                                                id=isoformName,
+                                                description='''
+                                                mRNA sequence from predicted
+                                                gene models of chickens line
+                                                6 & 7
+                                                ''')
                         isoformProteinSeqs.append(proteinRecord)
                         isoformRNASeqs.append(RNARecord)
                         isoformID += 1
 
-                if n > 0 and n%1000 == 0:
+                if n > 0 and n % 1000 == 0:
                     print >> sys.stderr, '...', n, 'transcripts done.'
 
     print >> sys.stderr, 'total genes = ', len(allGenes)
     print >> sys.stderr, 'Writing gene models to file...'
     writeBEDFile(allGenes, options.basename)
     print >> sys.stderr, 'Writing DNA sequences to file...'
-    SeqIO.write(isoformDNASeqs, options.basename+'.dnas.fa', 'fasta')
+    SeqIO.write(isoformDNASeqs, options.basename + '.dnas.fa', 'fasta')
     print >> sys.stderr, 'Writing RNA sequences to file...'
-    SeqIO.write(isoformRNASeqs, options.basename+'.mrnas.fa', 'fasta')
+    SeqIO.write(isoformRNASeqs, options.basename + '.mrnas.fa', 'fasta')
     print >> sys.stderr, 'Writing protein sequences to file...'
-    SeqIO.write(isoformProteinSeqs, options.basename+'.proteins.fa', 'fasta')
+    SeqIO.write(isoformProteinSeqs, options.basename + '.proteins.fa', 'fasta')
 
 if __name__ == '__main__':
     (options, args) = parser.parse_args()
