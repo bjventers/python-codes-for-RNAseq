@@ -1,12 +1,15 @@
 '''This script blast the query file to the protein
 
 database (nr--for internet BLAST, user specified db--for local BLAST)
-and report the highest bit score:length ratio. E-value can be specified. 
+and report the highest bit score:length ratio. E-value can be specified.
+
 '''
+
 import sys
 from Bio import SeqIO
 from Bio.Blast import NCBIWWW, NCBIXML
-import argparse 
+import argparse
+
 
 def internetBLAST(inputFile, fileFormat='fasta', evalue=0.001):
     for seqRecord in SeqIO.parse(inputFile, fileFormat):
@@ -17,17 +20,13 @@ def internetBLAST(inputFile, fileFormat='fasta', evalue=0.001):
         for blastRecord in blastRecords:
             for alignment in blastRecord.alignments:
                 for hsp in alignment.hsps:
-                    if hsp.expect < evalue: 
-                        '''
-                        print 'sequence:', alignment.title
-                        print 'bits/length:', hsp.bits/alignment.length
-                        print 'identity/length:', hsp.identities/float(alignment.length)
-                        '''
-                        ratios.append(hsp.bits/alignment.length)
+                    if hsp.expect < evalue:
+                        ratios.append(hsp.bits / alignment.length)
         if ratios:
             print >> sys.stdout, '%s\t%f' % (seqRecord.id, max(ratios))
         else:
             print >> sys.stdout, '%s\t%s' % (seqRecord.id, 'NA')
+
 
 def localBLAST_gene(inputFile, evalue=0.001):
     handle = open(inputFile)
@@ -36,7 +35,7 @@ def localBLAST_gene(inputFile, evalue=0.001):
     for blastRecord in blastRecords:
         queryName = blastRecord.query.split()[0]
         chrom, newGeneID, isoformID = queryName.split('_')
-        newGeneName = chrom+'_'+newGeneID
+        newGeneName = chrom + '_' + newGeneID
         if not geneName:
             geneName = newGeneName
             subjects = []
@@ -49,19 +48,23 @@ def localBLAST_gene(inputFile, evalue=0.001):
             '''
             if newGeneName != geneName:
                 if ratios:
-                    for geneName, ratio, subj in ratios:
-                        print >> sys.stdout, '%s\t%.16f\t%s' % (geneName, ratio, subj)
-                        print >> sys.stderr, '%s\t%.16f\t%s' % (geneName, ratio, subj)
-
+                    for geneName, ratio, \
+                            subj in ratios:
+                        print >> sys.stdout, '%s\t%.16f\t%s' % (geneName,
+                                                                ratio,
+                                                                subj)
+                        print >> sys.stderr, '%s\t%.16f\t%s' % (geneName,
+                                                                ratio,
+                                                                subj)
                 ratios = []
                 subjects = []
                 geneName = newGeneName
             else:
-                '''If the record is another isoform, 
-                
+                '''If the record is another isoform,
+
                 calculate the ratio and store the maximum
                 ratio in the list.
-                
+
                 '''
                 maxRatio = None
                 maxRatioSubj = None
@@ -69,7 +72,7 @@ def localBLAST_gene(inputFile, evalue=0.001):
                     for hsp in alignment.hsps:
                         subject = alignment.title.split()[0]
                         if hsp.expect < evalue:
-                            ratio = hsp.bits/len(hsp.sbjct)
+                            ratio = hsp.bits / len(hsp.sbjct)
                             if ratio > maxRatio:
                                 maxRatio = ratio
                                 maxRatioSubj = subject
@@ -92,13 +95,12 @@ def localBLAST_gene(inputFile, evalue=0.001):
                             q, ratio, subj = ratios[i]
                             if (subj == maxRatioSubj and maxRatio > ratio):
                                 ratios[i] = (geneName, maxRatio, maxRatioSubj)
-                                #print >> sys.stderr, 'new ratio updated', queryName, maxRatio, maxRatioSubj
-
 
     '''Print out the result of the last record'''
     if ratios:
         for geneName, ratio, subj in ratios:
             print >> sys.stdout, '%s\t%.16f\t%s' % (geneName, ratio, subj)
+
 
 def localBLAST_isoform(inputFile, evalue=0.01):
     handle = open(inputFile)
@@ -111,15 +113,20 @@ def localBLAST_isoform(inputFile, evalue=0.01):
             for hsp in alignment.hsps:
                 subject = alignment.title.split()[0]
                 if hsp.expect < evalue:
-                    ratio = hsp.bits/len(hsp.sbjct)
+                    ratio = hsp.bits / len(hsp.sbjct)
                     if ratio > maxRatio:
                         maxRatio = ratio
                         maxRatioSubj = subject
         if maxRatio:
-            print >> sys.stdout, '%s\t%.16f\t%s' % (isoform, maxRatio, maxRatioSubj)
-            print >> sys.stderr, '%s\t%.16f\t%s' % (isoform, maxRatio, maxRatioSubj)
+            print >> sys.stdout, '%s\t%.16f\t%s' % (isoform,
+                                                    maxRatio,
+                                                    maxRatioSubj)
+            print >> sys.stderr, '%s\t%.16f\t%s' % (isoform,
+                                                    maxRatio,
+                                                    maxRatioSubj)
 
-if __name__=='__main__':
+
+if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--method', dest='method', default='local',
@@ -133,7 +140,7 @@ if __name__=='__main__':
     parser.add_argument('--output', dest='outputFormat', default='gene',
                         help='output format [isoform, gene]')
     args = parser.parse_args()
-    
+
     if args.method == 'local':
         if args.outputFormat == 'gene':
             localBLAST_gene(args.inputFile, args.evalue)
