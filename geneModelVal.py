@@ -6,9 +6,10 @@ and report the highest bit score:length ratio. E-value can be specified.
 '''
 
 import sys
+import argparse
+
 from Bio import SeqIO
 from Bio.Blast import NCBIWWW, NCBIXML
-import argparse
 
 
 def internetBLAST(inputFile, fileFormat='fasta', evalue=0.001):
