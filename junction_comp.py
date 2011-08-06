@@ -1,76 +1,75 @@
-'''
-    This script compares the junctions between two tophat output files.
-    fp1 and fp2 are the junction files.
-    snp1 and snp2 are the SNP data in pileup format. (See samtools pileup format).
+'''This script parses junction file from Tophat and construct
 
-    Author: Likit Preeyanon
-    Email: preeyano@msu.edu
+splice junction objects, which are stored in dictionary using
+a coordinate as a key.
+
+Author: Likit Preeyanon
+Email: preeyano@msu.edu
+
 '''
+
 import sys
+import csv
 
-fp1 = sys.argv[1]
-fp2 = sys.argv[2]
-snp1 = sys.argv[3]
-snp2 = sys.argv[4]
 
-s1 = {}
-s2 = {}
+class Junction(object):
+    def __init__(self, chrom, start, end, coverage, strand, name):
+        self.chrom = chrom
+        self.start = start
+        self.end = end
+        self.coverage = coverage
+        self.name = name
+        self.strand = strand
 
-for line in open(snp1):
-    chr, pos, ref, geno, cov = line.strip().split()
-    pos = int(pos)
-    s1[pos] = geno
+    def __str__(self):
+        return '%s, %s' % (self.getCoord(), self.name)
 
-for line in open(snp2):
-    chr, pos, ref, geno, cov = line.strip().split()
-    pos = int(pos)
-    s2[pos] = geno
-    
-juncs = {}
-for line in open(fp1):
-    rows = [int(l) for l in line.strip().split(',')[:-1]]
-    start = rows[0]
-    juncs[start] = rows[1:]
+    def getCoord(self):
+        return '%s:%d-%d' % (self.chrom, self.start, self.end)
 
-for line in open(fp2):
-    rows = [int(l) for l in line.strip().split(',')[:-1]]
-    start = rows[0]
-    try:
-        j1 = set(juncs[start])
-        j2 = set(rows[1:])
-        diff1 = j1.difference(j2) 
-        diff2 = j2.difference(j1)
-        if diff1 or diff2:
-            print start,
-            if diff1: 
-                print '\t',
-                for s in diff1:
-                    if s in juncs[start]: subset = 1
-                    else: subset = 2
-                    print '%d:%d' % (subset,s),
-                    for j in range(s-3, s+3):
-                        if j in s1 and j in s2: continue
-                        elif j in s1:
-                            print '1:%d:%s;' % (j, s1[j]),
-                        elif j in s2:
-                            print '2:%d:%s;' % (j, s2[j]),
-                    print ',',
-                print '\t',
-            else: print '\tNone',
-            if diff2: 
-                print '\t',
-                for s in diff2:
-                    if s in juncs[start]: subset = 1
-                    else: subset = 2
-                    print '%d:%d' % (subset,s),
-                    for j in range(s-3, s+3):
-                        if j in s1 and j in s2: continue
-                        elif j in s1:
-                            print '1:%d:%s;' % (j, s1[j]),
-                        elif j in s2:
-                            print '2:%d:%s;' % (j, s2[j]),
-                    print ',',
-            else: print '\tNone',
-            print
-    except KeyError:
-        pass
+
+def getJunctionStartEnd(row):
+    chromStart = int(row[1])
+    blockStarts = [int(b) for b in row[-1].split(',')]
+    blockSizes = [int(s) for s in row[-2].split(',')]
+    juncStart = blockStarts[0] + blockSizes[0] + chromStart
+    juncEnd = blockStarts[-1] + chromStart
+    return juncStart, juncEnd
+
+
+def parseJunctions(fileName):
+
+    junctions = {}
+
+    with open(fileName) as junctionFile:
+        reader = csv.reader(junctionFile, dialect='excel-tab')
+        try:
+            for row in reader:
+                assert len(row) == 12, \
+                '''
+                    A junction file from Topphat must contain
+                    exactly 12 columns
+                '''
+
+                chrom = row[0]
+                name = row[3]
+                coverage = int(row[4])
+                strand = row[5]
+                juncStart, juncEnd = getJunctionStartEnd(row)
+
+                junction = Junction(chrom, juncStart, juncEnd,
+                                        coverage, strand, name)
+
+                junctions[junction.getCoord()] = junction
+
+        except csv.Error, e:
+            sys.exit('file %s, line %d: %s' % (fileName, reader.line_num, e))
+
+    return junctions
+
+
+if __name__ == '__main__':
+
+    junctions = parseJunctions(sys.argv[1])
+    for k, v in junctions.items():
+        print(v)
