@@ -10,11 +10,10 @@ The alignment has to be in PSL format from GMAP, BLAT.
 Usage: python exon_grouper.py [transcripts.psl]
 The output is written in a standard output.
 
-The script is written in Python 2.6.6
+The script is tested in Python 2.7.2
 
 Author: Likit Preeyanon
 Email: preeyano@msu.edu
-Last update: 13/11/2011
 
 '''
 
@@ -468,8 +467,7 @@ def writeBEDFile(allGenes, basename):
             for isoform in allGenes[chrom][geneID]:
                 if isoform.redundant:
                     continue
-                if isoform.mrnaSeq and len(isoform.mrnaSeq) < 300:
-                    continue
+
                 blockStarts = [j[1] - isoform.chromStart \
                                     for j in isoform.exons]
                 blockSizes = [j[2] - j[1] for j in isoform.exons]
@@ -520,7 +518,7 @@ def writeBEDFile(allGenes, basename):
                 newBlockStarts = [str(i) for i in blockStarts]
                 newBlockSizes = [str(i) for i in blockSizes]
 
-                name = "%s_%d_%d" % (chrom, geneID, isoform.isoformID)
+                name = "%s:%d.%d" % (chrom, geneID, isoform.isoformID)
                 score = 1000
                 itemRgb = "0,0,0"
                 writer.writerow((chrom,
