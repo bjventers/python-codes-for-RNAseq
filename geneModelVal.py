@@ -13,6 +13,14 @@ from Bio.Blast import NCBIWWW, NCBIXML
 
 
 def internetBLAST(inputFile, fileFormat='fasta', evalue=0.001):
+    '''This function runs Blast online and reads
+    
+    the output (xml format). Bitscore/length ration
+    for each match is calculated and the max score
+    is reported to stdout.
+    
+    '''
+
     for seqRecord in SeqIO.parse(inputFile, fileFormat):
         print >> sys.stderr, 'Doing BLAST (internet) search for', seqRecord.id
         ratios = []
@@ -30,12 +38,24 @@ def internetBLAST(inputFile, fileFormat='fasta', evalue=0.001):
 
 
 def localBLAST_gene(inputFile, evalue=0.001):
+    '''This function parses Blast output -- XML format
+    
+    and calculate bitscore/length ratio for each match
+    that has e-value less than a given one. The max score
+    of all isoforms is reported to stdout.
+
+    '''
+
     handle = open(inputFile)
     blastRecords = NCBIXML.parse(handle)
     geneName = None
     for blastRecord in blastRecords:
         queryName = blastRecord.query.split()[0]
-        chrom, newGeneID, isoformID = queryName.split('_')
+        try:
+            chrom, newGeneID, isoformID = queryName.split('_')
+        except ValueError:
+            print >> sys.stderr, queryName
+
         newGeneName = chrom + '_' + newGeneID
         if not geneName:
             geneName = newGeneName
@@ -104,6 +124,13 @@ def localBLAST_gene(inputFile, evalue=0.001):
 
 
 def localBLAST_isoform(inputFile, evalue=0.01):
+    '''This function parses Blast output -- XML format
+    
+    and calculate bitscore/length ratio for each match
+    that has e-value less than a given one. The max score
+    of each isoforms is reported to stdout.
+
+    '''
     handle = open(inputFile)
     blastRecords = NCBIXML.parse(handle)
     for blastRecord in blastRecords:
