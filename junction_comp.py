@@ -30,6 +30,7 @@ class Junction(object):
 
 def getJunction(row):
 
+
     chrom = row[0]
     name = row[3]
     coverage = int(row[4])
@@ -53,7 +54,10 @@ def parseJunctions(fileName):
     with open(fileName) as junctionFile:
         reader = csv.reader(junctionFile, dialect='excel-tab')
         try:
-            for row in reader:
+            for rowNum, row in enumerate(reader, start=1):
+                if rowNum % 1000 == 0:
+                    print('... %d' % rowNum)
+
                 assert len(row) == 12, \
                 '''A junction file from Topphat must
                 
@@ -62,17 +66,19 @@ def parseJunctions(fileName):
                 '''
 
                 blockCount = int(row[9])
+                coverage = int(row[4])
+
                 junctionNumber = 0
                 for junction in getJunction(row):
                     container[junction.getCoord()] = junction
                     junctionNumber += 1
 
-            assert junctionNumber == blockCount - 1, \
-                '''A number of junctions is less than a number of
+                assert junctionNumber == blockCount - 1, \
+                    '''A number of junctions is less than a number of
 
-                block count by 1
-                
-                '''
+                    block count by 1
+                    
+                    '''
 
         except csv.Error, e:
             sys.exit('file %s, line %d: %s' % (fileName, reader.line_num, e))
@@ -87,22 +93,39 @@ def findMatch(container1, container2):
     '''
 
     common = {}
+    diff = {}
     for key in container1.keys():
         try:
             junction = container2[key]
         except KeyError:
-            pass
+            junc1 = container1[key]
+            if junc1.coverage >= 10:
+                diff[key] = junc1
+                print(key, junc1.coverage)
         else:
-            common[key] = junction
+            junc1 = container1[key]
+            junc2 = container2[key]
+            if junc1.coverage >= 10 and junc2.coverage >= 10:
+                common[key] = junc1
 
-    return common
+    return common, diff
 
 
 if __name__ == '__main__':
 
-    junctions = parseJunctions(sys.argv[1])
-    introns = parseJunctions(sys.argv[2])
-    print(len(junctions), ' junctions')
-    print(len(introns), ' introns')
-    common = findMatch(junctions, introns)
-    print(common.keys())
+    introns = parseJunctions(sys.argv[1])
+    print('\n')
+    junctions1 = parseJunctions(sys.argv[2])
+    print('\n')
+    junctions2 = parseJunctions(sys.argv[3])
+    print('\n')
+
+    matchedJunctions, diffJunctions = findMatch(junctions1, junctions2)
+    matchedModels, diffModels = findMatch(diffJunctions, introns)
+
+    print('Dataset1 vs dataset 2')
+    print(len(matchedModels), ' matched')
+    print(len(diffModels), ' not matched')
+    for key in matchedModels.keys():
+        junc = matchedModels[key]
+        print >> sys.stderr, key, junc.name, junc.coverage
