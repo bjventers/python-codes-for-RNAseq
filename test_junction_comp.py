@@ -32,7 +32,7 @@ class TestJunctionClass(TestCase):
                         'chr1:154000-230000, JUNC00001')
 
 
-class TestGetJunctionStartEnd(TestCase):
+class TestGetJunction(TestCase):
     def setUp(self):
         self.row = ['chr1',     # chromosome name
                     '6419',     # chromosome start
@@ -48,11 +48,13 @@ class TestGetJunctionStartEnd(TestCase):
                     '0,3576',   # block starts
                     ]
 
-    def test_getJunctionStartEnd(self):
-        self.juncStart, self.juncEnd = jc.getJunctionStartEnd(self.row)
-        self.assertEqual(self.juncStart, 6477)
-        self.assertEqual(self.juncEnd, 9995)
+    def test_getJunction(self):
+        for junction in jc.getJunction(self.row):
+            self.assertEqual(junction.start, 6477)
+            self.assertEqual(junction.end, 9995)
 
+        junctions = [junc for junc in jc.getJunction(self.row)]
+        self.assertEqual(len(junctions), 1)
 
 if __name__ == '__main__':
     main()
