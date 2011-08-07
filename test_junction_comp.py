@@ -5,11 +5,9 @@ from mocker import Mocker
 
 class TestJunctionClass(TestCase):
 
-    def setUp(self):
+    def test_construct(self):
         self.junc = jc.Junction('chr1', 154000, 230000,
                                 230, '+', 'JUNC00001')
-
-    def test_construct(self):
         self.assertEqual(self.junc.chrom, 'chr1')
         self.assertEqual(self.junc.start, 154000)
         self.assertEqual(self.junc.end, 230000)
@@ -18,17 +16,27 @@ class TestJunctionClass(TestCase):
         self.assertEqual(self.junc.strand, '+')
 
     def test_get_coord(self):
-        self.assertEqual(self.junc.getCoord(),
+        mocker = Mocker()
+        junc = mocker.mock()
+        junc.chrom
+        mocker.result('chr1')
+        junc.start
+        mocker.result(154000)
+        junc.end
+        mocker.result(230000)
+        mocker.replay()
+        self.assertEqual(jc.Junction.getCoord.im_func(junc),
                         'chr1:154000-230000')
 
     def test_str(self):
         mocker = Mocker()
-        junction = mocker.mock()
-        junction.getCoord()
+        junc = mocker.mock()
+        junc.getCoord()
         mocker.result('chr1:154000-230000')
+        junc.name
+        mocker.result('JUNC00001')
         mocker.replay()
-        self.junc.getCoord = junction.getCoord
-        self.assertEqual(str(self.junc),
+        self.assertEqual(jc.Junction.__str__.im_func(junc),
                         'chr1:154000-230000, JUNC00001')
 
 
@@ -55,6 +63,22 @@ class TestGetJunction(TestCase):
 
         junctions = [junc for junc in jc.getJunction(self.row)]
         self.assertEqual(len(junctions), 1)
+
+class TestFindMatch(TestCase):
+
+    def test_find_match(self):
+        key = 'chr1:154000-230000'
+        mocker = Mocker()
+        junction = mocker.mock()
+        container = mocker.mock()
+        container.keys()
+        mocker.result([key])
+        container[key]
+        mocker.result(junction)
+        mocker.replay()
+        self.common = jc.findMatch(container, container)
+        self.assertEqual(self.common.keys(), ['chr1:154000-230000'])
+
 
 if __name__ == '__main__':
     main()
