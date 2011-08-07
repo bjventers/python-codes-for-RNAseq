@@ -130,6 +130,25 @@ class TestFindMatch(TestCase):
         self.assertEqual(self.common.keys(), [key1[0]])
         self.assertEqual(self.diff.keys(), [key1[1]])
 
+class TestJunctionScan(TestCase):
+    def setUp(self):
+        mocker = Mocker()
+        self.model = mocker.mock()
+        self.model.blockStarts
+        mocker.result([100, 400, 700])
+        self.model.blockEnds
+        mocker.result([200, 500, 800])
+        self.chromName
+        mocker.result('chr1')
+        mocker.replay()
+        self.junctions1 = {200:400, 500:700}
+        self.junctions2 = {200:700}
+
+    def test_shared_exon(self):
+        self.sharedExons = jc.scanJunctions(self.model, self.junctions1, self.junctions2)
+        for j in self.sharedExons:
+            self.assertEqual(j, [400, 720])
+
 
 if __name__ == '__main__':
     main()
