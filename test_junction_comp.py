@@ -66,7 +66,7 @@ class TestGetJunction(TestCase):
 
 class TestFindMatch(TestCase):
 
-    def test_find_match(self):
+    def test_find_match_matched(self):
         key = 'chr1:154000-230000'
         mocker = Mocker()
         junction = mocker.mock()
@@ -76,8 +76,59 @@ class TestFindMatch(TestCase):
         container[key]
         mocker.result(junction)
         mocker.replay()
-        self.common = jc.findMatch(container, container)
+        self.common, self.diff = jc.findMatch(container, container)
         self.assertEqual(self.common.keys(), ['chr1:154000-230000'])
+        self.assertEqual(self.diff.keys(), [])
+
+    def test_find_match_not_matched(self):
+        key1 = 'chr1:154000-230000'
+        key2 = 'chr1:155000-230000'
+        mocker = Mocker()
+        junction = mocker.mock()
+        container1 = mocker.mock()
+        container2 = mocker.mock()
+
+        container1.keys()
+        mocker.result([key1])
+        container2.keys()
+        mocker.result([key2])
+
+        container1[key1]
+        mocker.result(junction)
+        container2[key1]
+        mocker.throw(KeyError)
+
+        mocker.replay()
+        self.common, self.diff = jc.findMatch(container1, container2)
+        self.assertEqual(self.common.keys(), [])
+        self.assertEqual(self.diff.keys(), [key1])
+
+    def test_find_match_match_not_match(self):
+        key1 = ['chr1:154000-230000', 'chr1:155000-230000']
+        key2 = ['chr1:154000-230000']
+        mocker = Mocker()
+        junction = mocker.mock()
+        container1 = mocker.mock()
+        container2 = mocker.mock()
+
+        container1.keys()
+        mocker.result(key1)
+        container2.keys()
+        mocker.result(key2)
+
+        container1[key1[0]]
+        mocker.result(junction)
+        container1[key1[1]]
+        mocker.result(junction)
+        container2[key1[0]]
+        mocker.result(junction)
+        container2[key1[1]]
+        mocker.throw(KeyError)
+
+        mocker.replay()
+        self.common, self.diff = jc.findMatch(container1, container2)
+        self.assertEqual(self.common.keys(), [key1[0]])
+        self.assertEqual(self.diff.keys(), [key1[1]])
 
 
 if __name__ == '__main__':
