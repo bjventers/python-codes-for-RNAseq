@@ -48,7 +48,7 @@ class TestGetJunction(TestCase):
                     '0,3576',   # block starts
                     ]
 
-    def test_getJunction(self):
+    def test_get_junction(self):
         for junction in jc.getJunction(self.row):
             self.assertEqual(junction.start, 6477)
             self.assertEqual(junction.end, 9995)
