@@ -79,6 +79,24 @@ def parseJunctions(fileName):
 
     return container
 
+def findMatch(container1, container2):
+    '''this function finds junctions that are common in two
+
+    datasets.
+
+    '''
+
+    common = {}
+    for key in container1.keys():
+        try:
+            junction = container2[key]
+        except KeyError:
+            pass
+        else:
+            common[key] = junction
+
+    return common
+
 
 if __name__ == '__main__':
 
@@ -86,3 +104,5 @@ if __name__ == '__main__':
     introns = parseJunctions(sys.argv[2])
     print(len(junctions), ' junctions')
     print(len(introns), ' introns')
+    common = findMatch(junctions, introns)
+    print(common.keys())
