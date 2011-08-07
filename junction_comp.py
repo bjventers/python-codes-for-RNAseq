@@ -28,13 +28,22 @@ class Junction(object):
         return '%s:%d-%d' % (self.chrom, self.start, self.end)
 
 
-def getJunctionStartEnd(row):
+def getJunction(row):
+
+    chrom = row[0]
+    name = row[3]
+    coverage = int(row[4])
+    strand = row[5]
     chromStart = int(row[1])
     blockStarts = [int(b) for b in row[-1].split(',')]
     blockSizes = [int(s) for s in row[-2].split(',')]
-    juncStart = blockStarts[0] + blockSizes[0] + chromStart
-    juncEnd = blockStarts[-1] + chromStart
-    return juncStart, juncEnd
+
+    for i in range(len(blockStarts) - 1):
+        juncStart = blockStarts[i] + blockSizes[i] + chromStart
+        juncEnd = blockStarts[i + 1] + chromStart
+        junction = Junction(chrom, juncStart, juncEnd,
+                                coverage, strand, name)
+        yield junction
 
 
 def parseJunctions(fileName):
@@ -46,21 +55,21 @@ def parseJunctions(fileName):
         try:
             for row in reader:
                 assert len(row) == 12, \
+                ''' A junction file from Topphat must
+                contain exactly 12 columns '''
+
+                blockCount = int(row[9])
+                junctionNumber = 0
+                for junction in getJunction(row):
+                    junctions[junction.getCoord()] = junction
+                    junctionNumber += 1
+
+                '''Number of junctions is less than the number of
+
+                block count by 1
+
                 '''
-                    A junction file from Topphat must contain
-                    exactly 12 columns
-                '''
-
-                chrom = row[0]
-                name = row[3]
-                coverage = int(row[4])
-                strand = row[5]
-                juncStart, juncEnd = getJunctionStartEnd(row)
-
-                junction = Junction(chrom, juncStart, juncEnd,
-                                        coverage, strand, name)
-
-                junctions[junction.getCoord()] = junction
+                assert junctionNumber == blockCount - 1
 
         except csv.Error, e:
             sys.exit('file %s, line %d: %s' % (fileName, reader.line_num, e))
@@ -73,3 +82,4 @@ if __name__ == '__main__':
     junctions = parseJunctions(sys.argv[1])
     for k, v in junctions.items():
         print(v)
+    print(len(junctions))
