@@ -48,7 +48,7 @@ def getJunction(row):
 
 def parseJunctions(fileName):
 
-    junctions = {}
+    container = {}
 
     with open(fileName) as junctionFile:
         reader = csv.reader(junctionFile, dialect='excel-tab')
@@ -64,7 +64,7 @@ def parseJunctions(fileName):
                 blockCount = int(row[9])
                 junctionNumber = 0
                 for junction in getJunction(row):
-                    junctions[junction.getCoord()] = junction
+                    container[junction.getCoord()] = junction
                     junctionNumber += 1
 
             assert junctionNumber == blockCount - 1, \
@@ -77,12 +77,12 @@ def parseJunctions(fileName):
         except csv.Error, e:
             sys.exit('file %s, line %d: %s' % (fileName, reader.line_num, e))
 
-    return junctions
+    return container
 
 
 if __name__ == '__main__':
 
     junctions = parseJunctions(sys.argv[1])
-    for k, v in junctions.items():
-        print(v)
-    print(len(junctions))
+    introns = parseJunctions(sys.argv[2])
+    print(len(junctions), ' junctions')
+    print(len(introns), ' introns')
