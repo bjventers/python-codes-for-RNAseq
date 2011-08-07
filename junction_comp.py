@@ -55,8 +55,11 @@ def parseJunctions(fileName):
         try:
             for row in reader:
                 assert len(row) == 12, \
-                ''' A junction file from Topphat must
-                contain exactly 12 columns '''
+                '''A junction file from Topphat must
+                
+                contain exactly 12 columns
+
+                '''
 
                 blockCount = int(row[9])
                 junctionNumber = 0
@@ -64,12 +67,12 @@ def parseJunctions(fileName):
                     junctions[junction.getCoord()] = junction
                     junctionNumber += 1
 
-                '''Number of junctions is less than the number of
+            assert junctionNumber == blockCount - 1, \
+                '''A number of junctions is less than a number of
 
                 block count by 1
-
+                
                 '''
-                assert junctionNumber == blockCount - 1
 
         except csv.Error, e:
             sys.exit('file %s, line %d: %s' % (fileName, reader.line_num, e))
