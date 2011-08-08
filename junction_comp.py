@@ -146,7 +146,7 @@ def scanJunctions(model, junctions1, junctions2, container):
             else:
                 junc1Ends = set(junc1)
                 junc2Ends = set(junc2)
-                diff = junc1Ends.symmetric_difference(junc2Ends)
+                diff = junc1Ends.difference(junc2Ends)
                 if list(diff):
                     container[juncKey] = list(diff)
 
