@@ -167,21 +167,147 @@ class TestJunctionScan(TestCase):
 
     def test_shared_exon(self):
         mocker = Mocker()
+
         self.model = mocker.mock()
         self.model.blockStarts
         mocker.result([100, 400, 700])
-        self.model.blockEnds
-        mocker.result([200, 500, 800])
-        self.model.chromName
+        mocker.count(2, None)
+
+        self.model.blockSizes
+        mocker.result([100, 100, 100])
+        mocker.count(1, None)
+
+        self.model.chrom
         mocker.result('chr1')
+        mocker.count(2, None)
+
+        self.model.chromStart
+        mocker.result(0)
+        mocker.count(1, None)
+
+        self.junctions1 = mocker.mock()
+        self.junctions2 = mocker.mock()
+        self.junc1 = mocker.mock()
+        self.junc2 = mocker.mock()
+
+        juncKey = 'chr1:200'
+        self.junctions1[juncKey]
+        mocker.result(self.junc1)
+
+        self.junctions2[juncKey]
+        mocker.result(self.junc2)
+
+        self.junc1.ends
+        mocker.result([400])
+
+        self.junc2.ends
+        mocker.result([700])
+
+        juncKey = 'chr1:500'
+        self.junctions1[juncKey]
+        mocker.throw(KeyError)
+
+        juncKey = 'chr1:800'
+        self.junctions1[juncKey]
+        mocker.throw(KeyError)
+
+
         mocker.replay()
-        self.junctions1 = {200: 400, 500: 700}
-        self.junctions2 = {200: 700}
-        self.sharedExons = jc.scanJunctions(self.model,
-                                self.junctions1, self.junctions2)
+        self.sharedExons = {}
+        jc.scanJunctions(self.model, self.junctions1,
+                self.junctions2, self.sharedExons)
 
         for j in self.sharedExons:
-            self.assertEqual(j, [400, 720])
+            self.assertEqual(self.sharedExons[j], [400, 700])
+            self.assertEqual(j, 'chr1:100-200')
+
+class TestBuildJunctionDict(TestCase):
+    def setUp(self):
+        self.mocker = Mocker()
+        self.junctions = self.mocker.mock()
+        self.junction1 = self.mocker.mock()
+        self.junction2 = self.mocker.mock()
+        self.junction3 = self.mocker.mock()
+
+
+        self.junction1.start
+        self.mocker.result(100)
+        self.mocker.count(0, None)
+        
+        self.junction1.end
+        self.mocker.result(200)
+        self.mocker.count(0, None)
+
+        self.junction1.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(0, None)
+
+        self.junction2.start
+        self.mocker.result(100)
+        self.mocker.count(0, None)
+        
+        self.junction2.end
+        self.mocker.result(300)
+        self.mocker.count(0, None)
+
+        self.junction2.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(0, None)
+
+        self.junction3.start
+        self.mocker.result(200)
+        self.mocker.count(0, None)
+        
+        self.junction3.end
+        self.mocker.result(300)
+        self.mocker.count(0, None)
+
+        self.junction3.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(0, None)
+
+    def test_no_overlaps(self):
+
+        self.junctions.iteritems()
+        self.mocker.generate([('chr1:100-200', self.junction1)])
+
+        self.mocker.replay()
+
+        self.container = jc.buildJunctionDict(self.junctions)
+        self.assertEqual(self.container['chr1:100'], [200])
+        self.assertEqual(len(self.container), 1)
+
+        self.mocker.restore()
+        self.mocker.verify()
+
+    def test_overlaps(self):
+
+        self.junctions.iteritems()
+        self.mocker.generate([('chr1:100-200', self.junction1),
+                            ('chr1:100-300', self.junction2)])
+
+        self.mocker.replay()
+        self.container = jc.buildJunctionDict(self.junctions)
+        self.assertEqual(self.container['chr1:100'], [200, 300])
+        self.assertEqual(len(self.container), 1)
+
+        self.mocker.restore()
+        self.mocker.verify()
+
+    def test_multiple_junctions_with_overlaps(self):
+        self.junctions.iteritems()
+        self.mocker.generate([('chr1:100-200', self.junction1),
+                            ('chr1:100-300', self.junction2),
+                            ('chr1:200-300', self.junction3)],)
+
+        self.mocker.replay()
+        self.container = jc.buildJunctionDict(self.junctions)
+        self.assertEqual(self.container['chr1:100'], [200, 300])
+        self.assertEqual(self.container['chr1:200'], [300])
+        self.assertEqual(len(self.container), 2)
+
+        self.mocker.restore()
+        self.mocker.verify()
 
 
 if __name__ == '__main__':
