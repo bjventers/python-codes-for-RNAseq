@@ -18,7 +18,7 @@ class Junction(object):
         self.start = start
         self.end = end
         self.coverage = coverage
-        self.name = name
+        self.name = [name]
         self.strand = strand
 
     def __str__(self):
@@ -73,7 +73,7 @@ def parseJunctions(fileName):
         try:
             for rowNum, row in enumerate(reader, start=1):
                 if rowNum % 1000 == 0:
-                    print('... %d' % rowNum)
+                    print >> sys.stderr, '... {0}'.format(rowNum)
 
                 assert len(row) == 12, \
                 '''A junction file from Topphat must
@@ -86,7 +86,13 @@ def parseJunctions(fileName):
 
                 junctionNumber = 0
                 for junction in getJunction(row):
-                    container[junction.getCoord()] = junction
+                    try:
+                        existingJunction = container[junction.getCoord()]
+                    except KeyError:
+                        container[junction.getCoord()] = junction
+                    else:
+                        existingJunction.name += junction.name
+                            
                     junctionNumber += 1
 
                 assert junctionNumber == blockCount - 1, \
@@ -177,7 +183,7 @@ def findAlternativeSplicing(modelsFileName, junctions1, junctions2):
         try:
             for rowNum, row in enumerate(reader, start=1):
                 if rowNum % 1000 == 0:
-                    print('... %d' % rowNum)
+                    print >> sys.stderr, '... {0}'.format(rowNum)
 
                 assert len(row) == 12, \
                 '''A junction file from Topphat must
@@ -202,21 +208,30 @@ def findAlternativeSplicing(modelsFileName, junctions1, junctions2):
 
     return container
 
-
 if __name__ == '__main__':
 
-    junctions1 = buildJunctionDict(parseJunctions(sys.argv[2]))
-    junctions2 = buildJunctionDict(parseJunctions(sys.argv[3]))
+    print >> sys.stderr, 'parsing models...'
     modelsFileName = sys.argv[1]
     models = parseJunctions(modelsFileName)
+    print >> sys.stderr, '\n'
+
+    print >> sys.stderr, 'parsing junctions...'
+    junctions1 = buildJunctionDict(parseJunctions(sys.argv[2]))
+    print >> sys.stderr, '\n'
+
+    print >> sys.stderr, 'parsing junctions...'
+    junctions2 = buildJunctionDict(parseJunctions(sys.argv[3]))
+    print >> sys.stderr, '\n'
+
+    print >> sys.stderr, 'searching for an alternative splicing...'
     altSplicing = findAlternativeSplicing(modelsFileName, junctions1, junctions2)
 
     for k in altSplicing:
         for j in altSplicing[k]:
             key = '%s-%d' % (k, j)
             try:
-                junc = models[key]
+                transcript = models[key]
             except KeyError:
                 pass
             else:
-                print key
+                print('{0}\t{1}'.format(key, ','.join(transcript.name)))
