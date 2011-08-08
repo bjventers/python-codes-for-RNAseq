@@ -27,6 +27,23 @@ class Junction(object):
     def getCoord(self):
         return '%s:%d-%d' % (self.chrom, self.start, self.end)
 
+class Model(object):
+    def __init__(self, chrom, start, end, name, strand,
+                            blockSizes, blockStarts):
+
+        self.chrom = chrom
+        self.start = start
+        self.end = end
+        self.blockSizes = blockSizes 
+        self.name = name
+        self.strand = strand
+        self.blockStarts = blockStarts
+
+    def __str__(self):
+        return '%s, %s' % (self.getCoord(), self.name)
+
+    def getCoord(self):
+        return '%s:%d-%d' % (self.chrom, self.start, self.end)
 
 def getJunction(row):
 
@@ -101,7 +118,6 @@ def findMatch(container1, container2):
             junc1 = container1[key]
             if junc1.coverage >= 10:
                 diff[key] = junc1
-                print(key, junc1.coverage)
         else:
             junc1 = container1[key]
             junc2 = container2[key]
@@ -110,22 +126,84 @@ def findMatch(container1, container2):
 
     return common, diff
 
+def scanJunctions(model, junctions1, junctions2, container):
+
+    for i in range(len(model.blockStarts)):
+        start = model.blockStarts[i] + model.chromStart
+        end = model.blockSizes[i] + start
+
+        key = '%s:%d-%d' % (model.chrom, start, end)
+        juncKey = '%s:%d' % (model.chrom, end)
+
+        try:
+            junc1 = junctions1[juncKey]
+        except KeyError:
+            pass
+        else:
+            try:
+                junc2 = junctions2[juncKey]
+            except KeyError:
+                pass
+            else:
+                junc1Ends = set(junc1.ends)
+                junc2Ends = set(junc2.ends)
+                diff = junc1Ends.symmetric_difference(junc2Ends)
+                container[key] = list(diff)
+
+    return container
+
+
+def buildJunctionDict(junctions):
+    container = {}
+    for k,v in junctions.iteritems():
+        key = '%s:%d' % (v.chrom, v.start)
+        try:
+            junction = container[key]
+        except KeyError:
+            container[key] = [v.end]
+        else:
+            if v.end not in container[key]:
+                container[key].append(v.end)
+
+    return container
+
+
+def findAlternativeSplicing(models_file, junctions1, junctions2):
+
+    container = {}
+
+    with open(models_file) as modelsFile:
+        reader = csv.reader(modelsFile, dialect='excel-tab')
+        try:
+            for rowNum, row in enumerate(reader, start=1):
+                if rowNum % 1000 == 0:
+                    print('... %d' % rowNum)
+
+                assert len(row) == 12, \
+                '''A junction file from Topphat must
+                
+                contain exactly 12 columns
+
+                '''
+
+                chrom = row[0]
+                start = row[1]
+                end = row[2]
+                name = row[3]
+                strand = row[5]
+                blockSizes = row[-2]
+                blockStarts = row[-1]
+                model = Model(chrom, start, end, name, strand,
+                                    blockSizes, blockStarts)
+                scanJunctions(model, junctions1, junctions2, container)
+
+        except csv.Error, e:
+            sys.exit('file %s, line %d: %s' % (fileName, reader.line_num, e))
+
+    return container
+
 
 if __name__ == '__main__':
 
-    introns = parseJunctions(sys.argv[1])
-    print('\n')
-    junctions1 = parseJunctions(sys.argv[2])
-    print('\n')
-    junctions2 = parseJunctions(sys.argv[3])
-    print('\n')
-
-    matchedJunctions, diffJunctions = findMatch(junctions1, junctions2)
-    matchedModels, diffModels = findMatch(diffJunctions, introns)
-
-    print('Dataset1 vs dataset 2')
-    print(len(matchedModels), ' matched')
-    print(len(diffModels), ' not matched')
-    for key in matchedModels.keys():
-        junc = matchedModels[key]
-        print >> sys.stderr, key, junc.name, junc.coverage
+    junctions1 = buildJunctionDict(parseJunctions(sys.argv[2]))
+    junctions2 = buildJunctionDict(parseJunctions(sys.argv[3]))
