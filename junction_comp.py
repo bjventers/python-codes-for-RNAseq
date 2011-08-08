@@ -129,7 +129,7 @@ def findMatch(container1, container2):
 def scanJunctions(model, junctions1, junctions2, container):
 
     for i in range(len(model.blockStarts)):
-        start = model.blockStarts[i] + model.chromStart
+        start = model.blockStarts[i] + model.start
         end = model.blockSizes[i] + start
 
         key = '%s:%d-%d' % (model.chrom, start, end)
@@ -168,11 +168,11 @@ def buildJunctionDict(junctions):
     return container
 
 
-def findAlternativeSplicing(models_file, junctions1, junctions2):
+def findAlternativeSplicing(modelsFileName, junctions1, junctions2):
 
     container = {}
 
-    with open(models_file) as modelsFile:
+    with open(modelsFileName) as modelsFile:
         reader = csv.reader(modelsFile, dialect='excel-tab')
         try:
             for rowNum, row in enumerate(reader, start=1):
@@ -207,3 +207,7 @@ if __name__ == '__main__':
 
     junctions1 = buildJunctionDict(parseJunctions(sys.argv[2]))
     junctions2 = buildJunctionDict(parseJunctions(sys.argv[3]))
+    modelsFileName = sys.argv[1]
+    altSplicing = findAlternativeSplicing(modelsFileName, junctions1, junctions2)
+    for k in altSplicing:
+        print altSplicing[k]
