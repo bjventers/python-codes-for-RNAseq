@@ -187,8 +187,8 @@ class TestJunctionScan(TestCase):
 
         self.junctions1 = mocker.mock()
         self.junctions2 = mocker.mock()
-        self.junc1 = mocker.mock()
-        self.junc2 = mocker.mock()
+        self.junc1 = [400]
+        self.junc2 = [700]
 
         juncKey = 'chr1:200'
         self.junctions1[juncKey]
@@ -196,12 +196,6 @@ class TestJunctionScan(TestCase):
 
         self.junctions2[juncKey]
         mocker.result(self.junc2)
-
-        self.junc1.ends
-        mocker.result([400])
-
-        self.junc2.ends
-        mocker.result([700])
 
         juncKey = 'chr1:500'
         self.junctions1[juncKey]
@@ -219,7 +213,7 @@ class TestJunctionScan(TestCase):
 
         for j in self.sharedExons:
             self.assertEqual(self.sharedExons[j], [400, 700])
-            self.assertEqual(j, 'chr1:100-200')
+            self.assertEqual(j, 'chr1:200')
 
 class TestBuildJunctionDict(TestCase):
     def setUp(self):
