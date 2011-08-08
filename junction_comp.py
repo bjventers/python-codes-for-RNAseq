@@ -32,12 +32,12 @@ class Model(object):
                             blockSizes, blockStarts):
 
         self.chrom = chrom
-        self.start = start
-        self.end = end
-        self.blockSizes = blockSizes 
+        self.start = int(start)
+        self.end = int(end)
+        self.blockSizes = [int(s) for s in blockSizes.split(',')]
         self.name = name
         self.strand = strand
-        self.blockStarts = blockStarts
+        self.blockStarts = [int(s) for s in blockStarts.split(',')]
 
     def __str__(self):
         return '%s, %s' % (self.getCoord(), self.name)
@@ -83,7 +83,6 @@ def parseJunctions(fileName):
                 '''
 
                 blockCount = int(row[9])
-                coverage = int(row[4])
 
                 junctionNumber = 0
                 for junction in getJunction(row):
@@ -132,7 +131,7 @@ def scanJunctions(model, junctions1, junctions2, container):
         start = model.blockStarts[i] + model.start
         end = model.blockSizes[i] + start
 
-        key = '%s:%d-%d' % (model.chrom, start, end)
+        #key = '%s:%d-%d' % (model.chrom, start, end)
         juncKey = '%s:%d' % (model.chrom, end)
 
         try:
@@ -145,10 +144,11 @@ def scanJunctions(model, junctions1, junctions2, container):
             except KeyError:
                 pass
             else:
-                junc1Ends = set(junc1.ends)
-                junc2Ends = set(junc2.ends)
+                junc1Ends = set(junc1)
+                junc2Ends = set(junc2)
                 diff = junc1Ends.symmetric_difference(junc2Ends)
-                container[key] = list(diff)
+                if list(diff):
+                    container[juncKey] = list(diff)
 
     return container
 
@@ -208,6 +208,15 @@ if __name__ == '__main__':
     junctions1 = buildJunctionDict(parseJunctions(sys.argv[2]))
     junctions2 = buildJunctionDict(parseJunctions(sys.argv[3]))
     modelsFileName = sys.argv[1]
+    models = parseJunctions(modelsFileName)
     altSplicing = findAlternativeSplicing(modelsFileName, junctions1, junctions2)
+
     for k in altSplicing:
-        print altSplicing[k]
+        for j in altSplicing[k]:
+            key = '%s-%d' % (k, j)
+            try:
+                junc = models[key]
+            except KeyError:
+                pass
+            else:
+                print key
