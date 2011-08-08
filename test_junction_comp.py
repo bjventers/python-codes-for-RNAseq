@@ -12,7 +12,7 @@ class TestJunctionClass(TestCase):
         self.assertEqual(self.junc.start, 154000)
         self.assertEqual(self.junc.end, 230000)
         self.assertEqual(self.junc.coverage, 230)
-        self.assertEqual(self.junc.name, 'JUNC00001')
+        self.assertEqual(self.junc.name, ['JUNC00001'])
         self.assertEqual(self.junc.strand, '+')
 
     def test_get_coord(self):
