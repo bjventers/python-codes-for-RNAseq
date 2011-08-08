@@ -181,7 +181,7 @@ class TestJunctionScan(TestCase):
         mocker.result('chr1')
         mocker.count(2, None)
 
-        self.model.chromStart
+        self.model.start
         mocker.result(0)
         mocker.count(1, None)
 
