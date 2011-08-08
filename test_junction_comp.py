@@ -212,7 +212,7 @@ class TestJunctionScan(TestCase):
                 self.junctions2, self.sharedExons)
 
         for j in self.sharedExons:
-            self.assertEqual(self.sharedExons[j], [400, 700])
+            self.assertEqual(self.sharedExons[j], [400])
             self.assertEqual(j, 'chr1:200')
 
 class TestBuildJunctionDict(TestCase):
