@@ -45,6 +45,20 @@ class Model(object):
     def getCoord(self):
         return '%s:%d-%d' % (self.chrom, self.start, self.end)
 
+
+class Exon(object):
+    def __init__(self, chrom, start, end, nextStart, nextEnd, geneName):
+        self.chrom = chrom
+        self.start = start
+        self.end = end
+        if nextStart and nextEnd:
+            nextExon = '%s:%d-%d' % (self.chrom, nextStart, nextEnd)
+            self.nextExons = [nextExon]
+        else:
+            self.nextExons = []
+        self.geneName = geneName
+
+
 def getJunction(row):
 
 
@@ -206,6 +220,44 @@ def findAlternativeSplicing(modelsFileName, junctions1, junctions2):
             sys.exit('file %s, line %d: %s' % (modelsFileName, reader.line_num, e))
 
     return container
+
+
+def groupExons(genes, exons, isoform):
+    geneName, isonum = isoform.geneName.split('.')
+
+    for i in range(len(isoform.blockStarts)):
+        start = isoform.blockStarts[i] + isoform.chromStart
+        end = isoform.blockSizes[i] + start
+
+        if i == len(isoform.blockStarts)-1:
+            nextStart, nextEnd = None, None
+        else:
+            nextStart = isoform.blockStarts[i+1] + isoform.chromStart
+            nextEnd = nextStart + isoform.blockSizes[i+1]
+
+        exon = Exon(isoform.chrom, start, end, nextStart, nextEnd, geneName)
+
+        key = '%s:%d-%d' % (isoform.chrom, start, end)
+
+        exons[key] = exon
+
+        try:
+            gene = genes[geneName]
+        except KeyError:
+            genes[geneName] = [key]
+        else:
+            if key not in genes[geneName]:
+                genes[geneName].append(key)
+            else:
+                if nextStart and nextEnd:
+                    nextExon = '%s:%d-%d' % (isoform.chrom,
+                                            nextStart,
+                                            nextEnd)
+                    if nextExon not in exons[key].nextExons:
+                        exons[key].nextExons[nextExon]
+                else:
+                    pass
+
 
 if __name__ == '__main__':
 
