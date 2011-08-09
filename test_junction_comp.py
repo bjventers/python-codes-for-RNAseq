@@ -1,6 +1,7 @@
 from unittest import TestCase, main
 import junction_comp as jc
 from mocker import Mocker
+import sys
 
 
 class TestJunctionClass(TestCase):
@@ -302,6 +303,65 @@ class TestBuildJunctionDict(TestCase):
 
         self.mocker.restore()
         self.mocker.verify()
+
+class TestCreatePath(TestCase):
+    def setUp(self):
+        self.mocker = Mocker()
+        self.isoform1 = self.mocker.mock()
+        self.isoform2 = self.mocker.mock()
+
+        self.isoform1.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(1, None)
+        self.isoform1.chromStart
+        self.mocker.result(1000)
+        self.mocker.count(1, None)
+        self.isoform1.end
+        self.mocker.result(2000)
+        self.isoform1.geneName
+        self.mocker.result('chr1:gene1.1')
+        self.isoform1.startCodon
+        self.mocker.result(1000)
+        self.isoform1.stopCodon
+        self.mocker.result(2000)
+        self.isoform1.blockSizes
+        self.mocker.result([100, 100, 100, 100, 100])
+        self.mocker.count(1, None)
+        self.isoform1.blockStarts
+        self.mocker.result([100, 300, 500, 700, 900])
+        self.mocker.count(1, None)
+
+        self.isoform2.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(1, None)
+        self.isoform2.chromStart
+        self.mocker.result(1000)
+        self.mocker.count(1, None)
+        self.isoform2.end
+        self.mocker.result(2000)
+        self.isoform2.geneName
+        self.mocker.result('chr1:gene1.2')
+        self.isoform2.startCodon
+        self.mocker.result(1000)
+        self.isoform2.stopCodon
+        self.mocker.result(2000)
+        self.isoform2.blockSizes
+        self.mocker.result([100, 150, 100, 100, 100])
+        self.mocker.count(1, None)
+        self.isoform2.blockStarts
+        self.mocker.result([100, 250, 500, 700, 900])
+        self.mocker.count(1, None)
+
+        self.mocker.replay()
+
+    def test_grouping(self):
+        self.group = {}
+        self.exons = {}
+        jc.groupExons(self.group, self.exons, self.isoform1)
+        jc.groupExons(self.group, self.exons, self.isoform2)
+        self.assertEqual(len(self.group), 1)
+        self.assertEqual(self.group.keys()[0], 'chr1:gene1')
+        self.assertEqual(len(self.exons), 6)
 
 
 if __name__ == '__main__':
