@@ -137,16 +137,15 @@ def scanJunctions(model, junctions1, junctions2, container):
         start = model.blockStarts[i] + model.start
         end = model.blockSizes[i] + start
 
-        #key = '%s:%d-%d' % (model.chrom, start, end)
-        juncKey = '%s:%d' % (model.chrom, end)
+        juncStart = '%s:%d' % (model.chrom, end)
 
         try:
-            junc1 = junctions1[juncKey]
+            junc1 = junctions1[juncStart]
         except KeyError:
             pass
         else:
             try:
-                junc2 = junctions2[juncKey]
+                junc2 = junctions2[juncStart]
             except KeyError:
                 pass
             else:
@@ -154,7 +153,7 @@ def scanJunctions(model, junctions1, junctions2, container):
                 junc2Ends = set(junc2)
                 diff = junc1Ends.difference(junc2Ends)
                 if list(diff):
-                    container[juncKey] = list(diff)
+                    container[juncStart] = list(diff)
 
     return container
 
@@ -204,7 +203,7 @@ def findAlternativeSplicing(modelsFileName, junctions1, junctions2):
                 scanJunctions(model, junctions1, junctions2, container)
 
         except csv.Error, e:
-            sys.exit('file %s, line %d: %s' % (fileName, reader.line_num, e))
+            sys.exit('file %s, line %d: %s' % (modelsFileName, reader.line_num, e))
 
     return container
 
