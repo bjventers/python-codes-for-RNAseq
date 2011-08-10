@@ -309,6 +309,7 @@ class TestCreatePath(TestCase):
         self.mocker = Mocker()
         self.isoform1 = self.mocker.mock()
         self.isoform2 = self.mocker.mock()
+        self.isoform3 = self.mocker.mock()
 
         self.isoform1.chrom
         self.mocker.result('chr1')
@@ -352,6 +353,27 @@ class TestCreatePath(TestCase):
         self.mocker.result([100, 250, 500, 700, 900])
         self.mocker.count(1, None)
 
+        self.isoform3.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(1, None)
+        self.isoform3.chromStart
+        self.mocker.result(1000)
+        self.mocker.count(1, None)
+        self.isoform3.end
+        self.mocker.result(2000)
+        self.isoform3.geneName
+        self.mocker.result('chr1:gene1.3')
+        self.isoform3.startCodon
+        self.mocker.result(1000)
+        self.isoform3.stopCodon
+        self.mocker.result(2000)
+        self.isoform3.blockSizes
+        self.mocker.result([100, 50, 100, 100, 100])
+        self.mocker.count(1, None)
+        self.isoform3.blockStarts
+        self.mocker.result([100, 300, 500, 700, 900])
+        self.mocker.count(1, None)
+
         self.mocker.replay()
 
     def test_grouping(self):
@@ -359,9 +381,15 @@ class TestCreatePath(TestCase):
         self.exons = {}
         jc.groupExons(self.group, self.exons, self.isoform1)
         jc.groupExons(self.group, self.exons, self.isoform2)
+        jc.groupExons(self.group, self.exons, self.isoform3)
         self.assertEqual(len(self.group), 1)
         self.assertEqual(self.group.keys()[0], 'chr1:gene1')
-        self.assertEqual(len(self.exons), 6)
+        self.assertEqual(len(self.exons), 7)
+        self.assertEqual(len(self.exons['chr1:1100-1200'].nextExons), 3)
+        self.assertEqual(len(self.exons['chr1:1100-1200'].prevExons), 0)
+        self.assertEqual(len(self.exons['chr1:1500-1600'].prevExons), 3)
+        self.assertEqual(len(self.exons['chr1:1700-1800'].prevExons), 1)
+        self.assertEqual(len(self.exons['chr1:1900-2000'].nextExons), 0)
 
 
 class TestIdentifyJunctions(TestCase):
@@ -370,6 +398,8 @@ class TestIdentifyJunctions(TestCase):
         self.exon1 = self.mocker.mock()
         self.exon2 = self.mocker.mock()
         self.exon3 = self.mocker.mock()
+        self.exon4 = self.mocker.mock()
+        self.exon5 = self.mocker.mock()
 
         self.exon1.chrom
         self.mocker.result('chr1')
@@ -383,8 +413,15 @@ class TestIdentifyJunctions(TestCase):
         self.mocker.result(1200)
         self.mocker.count(1, None)
 
+        self.exon1.prevExons
+        self.mocker.result(set([]))
+        self.mocker.count(1, None)
+
         self.exon1.nextExons
-        self.mocker.result(['chr1:1300-1400', 'chr1:1250-1400'])
+        self.mocker.result(['chr1:1300-1400',
+                            'chr1:1250-1400',
+                            'chr1:1500-1600',
+                            ])
         self.mocker.count(1, None)
 
         self.exon2.chrom
@@ -400,7 +437,11 @@ class TestIdentifyJunctions(TestCase):
         self.mocker.count(1, None)
 
         self.exon2.nextExons
-        self.mocker.result([])
+        self.mocker.result(set(['chr1:1500-1600']))
+        self.mocker.count(1, None)
+
+        self.exon2.prevExons
+        self.mocker.result(set(['chr1:1100-1200']))
         self.mocker.count(1, None)
 
         self.exon3.chrom
@@ -416,7 +457,54 @@ class TestIdentifyJunctions(TestCase):
         self.mocker.count(1, None)
 
         self.exon3.nextExons
+        self.mocker.result(set(['chr1:1500-1600']))
+        self.mocker.count(1, None)
+
+        self.exon3.prevExons
+        self.mocker.result(set(['chr1:1100-1200']))
+        self.mocker.count(1, None)
+
+        self.exon4.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(1, None)
+
+        self.exon4.start
+        self.mocker.result(1300)
+        self.mocker.count(1, None)
+
+        self.exon4.end
+        self.mocker.result(1350)
+        self.mocker.count(1, None)
+
+        self.exon4.nextExons
+        self.mocker.result(set(['chr1:1500-1600']))
+        self.mocker.count(1, None)
+
+        self.exon4.prevExons
+        self.mocker.result(set(['chr1:1100-1200']))
+        self.mocker.count(1, None)
+
+        self.exon5.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(1, None)
+
+        self.exon5.start
+        self.mocker.result(1500)
+        self.mocker.count(1, None)
+
+        self.exon5.end
+        self.mocker.result(1600)
+        self.mocker.count(1, None)
+
+        self.exon5.nextExons
         self.mocker.result([])
+        self.mocker.count(1, None)
+
+        self.exon5.prevExons
+        self.mocker.result(set(['chr1:1100-1200',
+                                'chr1:1300-1400',
+                                'chr1:1250-1400',
+                                'chr1:1300-1350']))
         self.mocker.count(1, None)
 
         self.mocker.replay()
@@ -425,21 +513,30 @@ class TestIdentifyJunctions(TestCase):
 
         self.genes = {'chr1:gene1':['chr1:1100-1200',
                                     'chr1:1300-1400',
-                                    'chr1:1250-1400']}
+                                    'chr1:1250-1400',
+                                    'chr1:1500-1600',
+                                    ]}
 
         self.exons = {}
         self.exons['chr1:1100-1200'] = self.exon1
         self.exons['chr1:1300-1400'] = self.exon2
         self.exons['chr1:1250-1400'] = self.exon3
+        self.exons['chr1:1300-1350'] = self.exon4
+        self.exons['chr1:1500-1600'] = self.exon5
 
         self.junctions = jc.identifyJunctions(self.genes, self.exons)
-        self.assertEqual(len(self.junctions), 2)
+        self.assertEqual(len(self.junctions), 5)
 
         altss = [k for k in self.junctions.keys() \
                 if self.junctions[k].event == 'alternativeSpliceSite']
+        skipped = [k for k in self.junctions.keys() \
+                if self.junctions[k].event == 'skippedExon']
 
-        self.assertEqual(len(altss), 2)
+        self.assertEqual(len(altss), 4)
         self.assertEqual('chr1:1200-1300' in altss, True)
+
+        self.assertEqual(len(skipped), 1)
+        self.assertEqual('chr1:1200-1500' in skipped, True)
 
 if __name__ == '__main__':
     main()
