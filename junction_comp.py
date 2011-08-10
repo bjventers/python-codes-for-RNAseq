@@ -59,6 +59,13 @@ class Exon(object):
         self.geneName = geneName
 
 
+class ModelJunction(object):
+    def __init__(self, chrom, start, end, event):
+        self.chrom = chrom
+        self.start = start
+        self.end = end
+        self.event = event
+
 def getJunction(row):
 
 
@@ -258,6 +265,26 @@ def groupExons(genes, exons, isoform):
                 else:
                     pass
 
+def identifyJunctions(genes, exons):
+    junctions = {}
+    def getStart(key):
+        chrom, startEnd = key.split(':')
+        start, end = [int(j) for j in startEnd.split('-')]
+        return start
+
+    for k in genes.keys():
+        allExons = sorted(genes[k], key=lambda x: getStart(x))
+        for e in allExons:
+            exon = exons[e]
+            if len(exon.nextExons) > 1:
+                for nextEx in exon.nextExons:
+                    nextExon = exons[nextEx]
+                    junction = ModelJunction(exon.chrom, exon.end,
+                                        nextExon.start, 'alternativeSpliceSite')
+                    juncKey = '%s:%d-%d' % (exon.chrom, exon.end, nextExon.start)
+                    junctions[juncKey] = junction
+
+    return junctions
 
 if __name__ == '__main__':
 
