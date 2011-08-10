@@ -47,15 +47,27 @@ class Model(object):
 
 
 class Exon(object):
-    def __init__(self, chrom, start, end, nextStart, nextEnd, geneName):
+    def __init__(self, chrom, start, end,
+                    prevStart, prevEnd,
+                    nextStart, nextEnd,
+                    geneName):
+
         self.chrom = chrom
         self.start = start
         self.end = end
+
+        if prevStart and prevEnd:
+            prevExon = '%s:%d-%d' % (self.chrom, prevStart, prevEnd)
+            self.prevExons = set([prevExon])
+        else:
+            self.prevExons = set([])
+
         if nextStart and nextEnd:
             nextExon = '%s:%d-%d' % (self.chrom, nextStart, nextEnd)
-            self.nextExons = [nextExon]
+            self.nextExons = set([nextExon])
         else:
-            self.nextExons = []
+            self.nextExons = set([])
+
         self.geneName = geneName
 
 
@@ -236,53 +248,91 @@ def groupExons(genes, exons, isoform):
         start = isoform.blockStarts[i] + isoform.chromStart
         end = isoform.blockSizes[i] + start
 
+        if i == 0:
+            prevStart = None
+            prevEnd = None
+        else:
+            prevStart = isoform.blockStarts[i-1] + isoform.chromStart
+            prevEnd = prevStart + isoform.blockSizes[i-1]
+            prevExon = '%s:%d-%d' % (isoform.chrom, prevStart, prevEnd)
+
         if i == len(isoform.blockStarts)-1:
-            nextStart, nextEnd = None, None
+            nextStart = None
+            nextEnd = None
         else:
             nextStart = isoform.blockStarts[i+1] + isoform.chromStart
             nextEnd = nextStart + isoform.blockSizes[i+1]
+            nextExon = '%s:%d-%d' % (isoform.chrom, nextStart, nextEnd)
 
-        exon = Exon(isoform.chrom, start, end, nextStart, nextEnd, geneName)
-
-        key = '%s:%d-%d' % (isoform.chrom, start, end)
-
-        exons[key] = exon
+        exonCoord = '%s:%d-%d' % (isoform.chrom, start, end)
+        
+        try:
+            e = exons[exonCoord]
+        except KeyError:
+            exon = Exon(isoform.chrom, start, end,
+                        prevStart, prevEnd,
+                        nextStart, nextEnd,
+                        geneName)
+            exons[exonCoord] = exon
+        else:
+            if prevStart: e.prevExons.add(prevExon)
+            if nextStart: e.nextExons.add(nextExon)
 
         try:
             gene = genes[geneName]
         except KeyError:
-            genes[geneName] = [key]
+            genes[geneName] = set([exonCoord])
         else:
-            if key not in genes[geneName]:
-                genes[geneName].append(key)
-            else:
-                if nextStart and nextEnd:
-                    nextExon = '%s:%d-%d' % (isoform.chrom,
-                                            nextStart,
-                                            nextEnd)
-                    if nextExon not in exons[key].nextExons:
-                        exons[key].nextExons[nextExon]
-                else:
-                    pass
+            if exonCoord not in genes[geneName]:
+                genes[geneName].add(exonCoord)
+
 
 def identifyJunctions(genes, exons):
     junctions = {}
-    def getStart(key):
-        chrom, startEnd = key.split(':')
+    def getStart(coord):
+        chrom, startEnd = coord.split(':')
         start, end = [int(j) for j in startEnd.split('-')]
         return start
 
     for k in genes.keys():
         allExons = sorted(genes[k], key=lambda x: getStart(x))
-        for e in allExons:
-            exon = exons[e]
+        for i in range(len(allExons)):
+            exon = exons[allExons[i]]
+            exonCoord = '%s:%d-%d' % (exon.chrom, exon.start, exon.end)
+
             if len(exon.nextExons) > 1:
-                for nextEx in exon.nextExons:
-                    nextExon = exons[nextEx]
+                for nextExonCoord in exon.nextExons:
+                    nextExon = exons[nextExonCoord]
+
+                    if len(exons[nextExonCoord].prevExons) > 1:
+                        altEvent = 'skippedExon'
+                    else:
+                        altEvent = 'alternativeSpliceSite'
+
                     junction = ModelJunction(exon.chrom, exon.end,
-                                        nextExon.start, 'alternativeSpliceSite')
-                    juncKey = '%s:%d-%d' % (exon.chrom, exon.end, nextExon.start)
-                    junctions[juncKey] = junction
+                                        nextExon.start, altEvent)
+
+                    juncCoord = '%s:%d-%d' % (exon.chrom,
+                                                exon.end,
+                                                nextExon.start)
+                    junctions[juncCoord] = junction
+
+            if len(exon.prevExons) > 1:
+                for prevExonCoord in exon.prevExons:
+                    prevExon = exons[prevExonCoord]
+
+                    if len(prevExon.nextExons) > 1:
+                        altEvent = 'skippedExon'
+                    else:
+                        altEvent = 'alternativeSpliceSite'
+
+                    junction = ModelJunction(exon.chrom, exon.end,
+                                        prevExon.start, altEvent)
+
+                    juncCoord = '%s:%d-%d' % (exon.chrom,
+                                                prevExon.end,
+                                                exon.start)
+                    junctions[juncCoord] = junction
 
     return junctions
 
