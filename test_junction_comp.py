@@ -364,5 +364,82 @@ class TestCreatePath(TestCase):
         self.assertEqual(len(self.exons), 6)
 
 
+class TestIdentifyJunctions(TestCase):
+    def setUp(self):
+        self.mocker = Mocker()
+        self.exon1 = self.mocker.mock()
+        self.exon2 = self.mocker.mock()
+        self.exon3 = self.mocker.mock()
+
+        self.exon1.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(1, None)
+
+        self.exon1.start
+        self.mocker.result(1100)
+        self.mocker.count(1, None)
+
+        self.exon1.end
+        self.mocker.result(1200)
+        self.mocker.count(1, None)
+
+        self.exon1.nextExons
+        self.mocker.result(['chr1:1300-1400', 'chr1:1250-1400'])
+        self.mocker.count(1, None)
+
+        self.exon2.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(1, None)
+
+        self.exon2.start
+        self.mocker.result(1300)
+        self.mocker.count(1, None)
+
+        self.exon2.end
+        self.mocker.result(1400)
+        self.mocker.count(1, None)
+
+        self.exon2.nextExons
+        self.mocker.result([])
+        self.mocker.count(1, None)
+
+        self.exon3.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(1, None)
+
+        self.exon3.start
+        self.mocker.result(1250)
+        self.mocker.count(1, None)
+
+        self.exon3.end
+        self.mocker.result(1400)
+        self.mocker.count(1, None)
+
+        self.exon3.nextExons
+        self.mocker.result([])
+        self.mocker.count(1, None)
+
+        self.mocker.replay()
+
+    def test_alternative_splice_site(self):
+
+        self.genes = {'chr1:gene1':['chr1:1100-1200',
+                                    'chr1:1300-1400',
+                                    'chr1:1250-1400']}
+
+        self.exons = {}
+        self.exons['chr1:1100-1200'] = self.exon1
+        self.exons['chr1:1300-1400'] = self.exon2
+        self.exons['chr1:1250-1400'] = self.exon3
+
+        self.junctions = jc.identifyJunctions(self.genes, self.exons)
+        self.assertEqual(len(self.junctions), 2)
+
+        altss = [k for k in self.junctions.keys() \
+                if self.junctions[k].event == 'alternativeSpliceSite']
+
+        self.assertEqual(len(altss), 2)
+        self.assertEqual('chr1:1200-1300' in altss, True)
+
 if __name__ == '__main__':
     main()
