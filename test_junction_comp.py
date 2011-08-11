@@ -319,7 +319,7 @@ class TestCreatePath(TestCase):
         self.mocker.count(1, None)
         self.isoform1.end
         self.mocker.result(2000)
-        self.isoform1.geneName
+        self.isoform1.name
         self.mocker.result('chr1:gene1.1')
         self.isoform1.startCodon
         self.mocker.result(1000)
@@ -340,7 +340,7 @@ class TestCreatePath(TestCase):
         self.mocker.count(1, None)
         self.isoform2.end
         self.mocker.result(2000)
-        self.isoform2.geneName
+        self.isoform2.name
         self.mocker.result('chr1:gene1.2')
         self.isoform2.startCodon
         self.mocker.result(1000)
@@ -361,7 +361,7 @@ class TestCreatePath(TestCase):
         self.mocker.count(1, None)
         self.isoform3.end
         self.mocker.result(2000)
-        self.isoform3.geneName
+        self.isoform3.name
         self.mocker.result('chr1:gene1.3')
         self.isoform3.startCodon
         self.mocker.result(1000)
@@ -400,6 +400,11 @@ class TestIdentifyJunctions(TestCase):
         self.exon3 = self.mocker.mock()
         self.exon4 = self.mocker.mock()
         self.exon5 = self.mocker.mock()
+        self.exon6 = self.mocker.mock()
+        self.exon7 = self.mocker.mock()
+        self.exon8 = self.mocker.mock()
+        self.exon9 = self.mocker.mock()
+        self.exon10 = self.mocker.mock()
 
         self.exon1.chrom
         self.mocker.result('chr1')
@@ -420,6 +425,7 @@ class TestIdentifyJunctions(TestCase):
         self.exon1.nextExons
         self.mocker.result(['chr1:1300-1400',
                             'chr1:1250-1400',
+                            'chr1:1300-1350',
                             'chr1:1500-1600',
                             ])
         self.mocker.count(1, None)
@@ -457,7 +463,7 @@ class TestIdentifyJunctions(TestCase):
         self.mocker.count(1, None)
 
         self.exon3.nextExons
-        self.mocker.result(set(['chr1:1500-1600']))
+        self.mocker.result(set(['chr1:1500-1600', 'chr1:1900-2000']))
         self.mocker.count(1, None)
 
         self.exon3.prevExons
@@ -497,16 +503,117 @@ class TestIdentifyJunctions(TestCase):
         self.mocker.count(1, None)
 
         self.exon5.nextExons
-        self.mocker.result([])
+        self.mocker.result(set(['chr1:1700-1800']))
         self.mocker.count(1, None)
 
         self.exon5.prevExons
         self.mocker.result(set(['chr1:1100-1200',
                                 'chr1:1300-1400',
                                 'chr1:1250-1400',
-                                'chr1:1300-1350']))
+                                'chr1:1300-1350',
+                                'chr1:1220-1320',
+                                ]))
         self.mocker.count(1, None)
 
+        self.exon6.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(1, None)
+
+        self.exon6.start
+        self.mocker.result(1700)
+        self.mocker.count(1, None)
+
+        self.exon6.end
+        self.mocker.result(1800)
+        self.mocker.count(1, None)
+
+        self.exon6.nextExons
+        self.mocker.result(set(['chr1:1900-2000', 'chr1:1930-2300']))
+        self.mocker.count(1, None)
+
+        self.exon6.prevExons
+        self.mocker.result(set(['chr1:1500-1600']))
+        self.mocker.count(1, None)
+
+        self.exon7.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(1, None)
+
+        self.exon7.start
+        self.mocker.result(1900)
+        self.mocker.count(1, None)
+
+        self.exon7.end
+        self.mocker.result(2000)
+        self.mocker.count(1, None)
+
+        self.exon7.nextExons
+        self.mocker.result(set([]))
+        self.mocker.count(1, None)
+
+        self.exon7.prevExons
+        self.mocker.result(set(['chr1:1250-1400', 'chr1:1700-1800']))
+        self.mocker.count(1, None)
+
+        self.exon8.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(1, None)
+
+        self.exon8.start
+        self.mocker.result(1220)
+        self.mocker.count(1, None)
+
+        self.exon8.end
+        self.mocker.result(1320)
+        self.mocker.count(1, None)
+
+        self.exon8.nextExons
+        self.mocker.result(['chr1:1500-1600'])
+        self.mocker.count(1, None)
+
+        self.exon8.prevExons
+        self.mocker.result(set([]))
+        self.mocker.count(1, None)
+
+        self.exon9.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(1, None)
+
+        self.exon9.start
+        self.mocker.result(1900)
+        self.mocker.count(1, None)
+
+        self.exon9.end
+        self.mocker.result(2300)
+        self.mocker.count(1, None)
+
+        self.exon9.nextExons
+        self.mocker.result([])
+        self.mocker.count(1, None)
+
+        self.exon9.prevExons
+        self.mocker.result(set(['chr1:1700-1800']))
+        self.mocker.count(1, None)
+
+        self.exon10.chrom
+        self.mocker.result('chr1')
+        self.mocker.count(1, None)
+
+        self.exon10.start
+        self.mocker.result(1930)
+        self.mocker.count(1, None)
+
+        self.exon10.end
+        self.mocker.result(2300)
+        self.mocker.count(1, None)
+
+        self.exon10.nextExons
+        self.mocker.result([])
+        self.mocker.count(1, None)
+
+        self.exon10.prevExons
+        self.mocker.result(set(['chr1:1700-1800']))
+        self.mocker.count(1, None)
         self.mocker.replay()
 
     def test_alternative_splice_site(self):
@@ -514,7 +621,13 @@ class TestIdentifyJunctions(TestCase):
         self.genes = {'chr1:gene1':['chr1:1100-1200',
                                     'chr1:1300-1400',
                                     'chr1:1250-1400',
+                                    'chr1:1300-1350',
                                     'chr1:1500-1600',
+                                    'chr1:1700-1800',
+                                    'chr1:1900-2000',
+                                    'chr1:1220-1320',
+                                    'chr1:1900-2300',
+                                    'chr1:1930-2300',
                                     ]}
 
         self.exons = {}
@@ -523,20 +636,39 @@ class TestIdentifyJunctions(TestCase):
         self.exons['chr1:1250-1400'] = self.exon3
         self.exons['chr1:1300-1350'] = self.exon4
         self.exons['chr1:1500-1600'] = self.exon5
+        self.exons['chr1:1700-1800'] = self.exon6
+        self.exons['chr1:1900-2000'] = self.exon7
+        self.exons['chr1:1220-1320'] = self.exon8
+        self.exons['chr1:1900-2300'] = self.exon9
+        self.exons['chr1:1930-2300'] = self.exon10
+
 
         self.junctions = jc.identifyJunctions(self.genes, self.exons)
-        self.assertEqual(len(self.junctions), 5)
+        self.assertEqual(len(self.junctions), 10)
 
-        altss = [k for k in self.junctions.keys() \
+        altSplicing = [k for k in self.junctions.keys() \
+                if self.junctions[k].event == 'alternativeSplicing']
+        print >> sys.stderr, 'alter splicing', altSplicing
+
+        altSS = [k for k in self.junctions.keys() \
                 if self.junctions[k].event == 'alternativeSpliceSite']
+        #print >> sys.stderr, 'alter splice site', altSS
+
         skipped = [k for k in self.junctions.keys() \
                 if self.junctions[k].event == 'skippedExon']
+        #print >> sys.stderr, 'skipped exon', skipped 
 
-        self.assertEqual(len(altss), 4)
-        self.assertEqual('chr1:1200-1300' in altss, True)
+        noAlt = [k for k in self.junctions.keys() if not self.junctions[k].event]
 
-        self.assertEqual(len(skipped), 1)
+        self.assertEqual(len(altSplicing), 2)
+
+        self.assertEqual(len(altSS), 4)
+        self.assertEqual('chr1:1200-1300' in altSS, True)
+
+        self.assertEqual(len(skipped), 2)
         self.assertEqual('chr1:1200-1500' in skipped, True)
+
+        self.assertEqual(len(noAlt), 2)
 
 if __name__ == '__main__':
     main()
