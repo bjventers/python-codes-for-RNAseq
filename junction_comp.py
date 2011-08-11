@@ -32,8 +32,8 @@ class Model(object):
                             blockSizes, blockStarts):
 
         self.chrom = chrom
-        self.start = int(start)
-        self.end = int(end)
+        self.chromStart = int(start)
+        self.chromEnd = int(end)
         self.blockSizes = [int(s) for s in blockSizes.split(',')]
         self.name = name
         self.strand = strand
@@ -190,7 +190,6 @@ def scanJunctions(model, junctions1, junctions2, container):
 
     return container
 
-
 def buildJunctionDict(junctions):
     container = {}
     for k,v in junctions.iteritems():
@@ -206,7 +205,7 @@ def buildJunctionDict(junctions):
     return container
 
 
-def findAlternativeSplicing(modelsFileName, junctions1, junctions2):
+def findAlternativeSplicing(junctions1, junctions2):
 
     container = {}
 
@@ -241,8 +240,39 @@ def findAlternativeSplicing(modelsFileName, junctions1, junctions2):
     return container
 
 
+def parseGeneModels(modelsFileName):
+
+    with open(modelsFileName) as modelsFile:
+        reader = csv.reader(modelsFile, dialect='excel-tab')
+        try:
+            for rowNum, row in enumerate(reader, start=1):
+                if rowNum % 1000 == 0:
+                    print >> sys.stderr, '... {0}'.format(rowNum)
+
+                assert len(row) == 12, \
+                '''A junction file from Topphat must
+                
+                contain exactly 12 columns
+
+                '''
+
+                chrom = row[0]
+                start = row[1]
+                end = row[2]
+                name = row[3]
+                strand = row[5]
+                blockSizes = row[-2]
+                blockStarts = row[-1]
+                model = Model(chrom, start, end, name, strand,
+                                    blockSizes, blockStarts)
+                yield model
+
+        except csv.Error, e:
+            sys.exit('file %s, line %d: %s' % (modelsFileName,
+                                                reader.line_num, e))
+
 def groupExons(genes, exons, isoform):
-    geneName, isonum = isoform.geneName.split('.')
+    geneName, isonum = isoform.name.split('.')
 
     for i in range(len(isoform.blockStarts)):
         start = isoform.blockStarts[i] + isoform.chromStart
@@ -297,9 +327,10 @@ def identifyJunctions(genes, exons):
     for k in genes.keys():
         allExons = sorted(genes[k], key=lambda x: getStart(x))
         for i in range(len(allExons)):
-            exon = exons[allExons[i]]
-            exonCoord = '%s:%d-%d' % (exon.chrom, exon.start, exon.end)
+            exonCoord = allExons[i]
+            exon = exons[exonCoord]
 
+            '''
             if len(exon.nextExons) > 1:
                 for nextExonCoord in exon.nextExons:
                     nextExon = exons[nextExonCoord]
@@ -316,15 +347,30 @@ def identifyJunctions(genes, exons):
                                                 exon.end,
                                                 nextExon.start)
                     junctions[juncCoord] = junction
+            '''
 
             if len(exon.prevExons) > 1:
                 for prevExonCoord in exon.prevExons:
                     prevExon = exons[prevExonCoord]
 
                     if len(prevExon.nextExons) > 1:
-                        altEvent = 'skippedExon'
+                        for e in prevExon.nextExons:
+                            ex = exons[e]
+                            if ex.end < exon.start:
+                                altEvent = 'skippedExon'
+                                break
                     else:
-                        altEvent = 'alternativeSpliceSite'
+                        if prevExon.prevExons == set([]):
+                            altEvent = 'alternativeSplicing'
+                        else:
+                            for e in exon.prevExons:
+                                otherPrevExon = exons[e]
+                                if otherPrevExon.end != prevExon.end and \
+                                    otherPrevExon.end > prevExon.start:
+                                    altEvent = 'alternativeSpliceSite'
+                                    break
+                                else:
+                                    altEvent = None
 
                     junction = ModelJunction(exon.chrom, exon.end,
                                         prevExon.start, altEvent)
@@ -334,32 +380,113 @@ def identifyJunctions(genes, exons):
                                                 exon.start)
                     junctions[juncCoord] = junction
 
+            if len(exon.prevExons) == 1:
+                for prevExonCoord in exon.prevExons:
+                    prevExon = exons[prevExonCoord]
+
+                    if len(prevExon.nextExons) > 1:
+                        for e in prevExon.nextExons:
+                            ex = exons[e]
+                            print >> sys.stderr, ex.start, ex.end
+                            if ex.start != exon.start:
+                                if ex.nextExons == set([]) or \
+                                    exon.nextExons == set([]):
+                                    altEvent = 'alternativeSplicing'
+                                else:
+                                    altEvent = 'alternativeSpliceSite'
+                                break
+                            else:
+                                altEvent = None
+                    else:
+                        altEvent = None
+
+                    junction = ModelJunction(exon.chrom, prevExon.end,
+                                        exon.start, altEvent)
+                    juncCoord = '%s:%d-%d' % (exon.chrom,
+                                                prevExon.end,
+                                                exon.start,
+                                                )
+                    try:
+                        j = junctions[juncCoord]
+                    except KeyError:
+                        junctions[juncCoord] = junction
+
+            if len(exon.nextExons) == 1:
+                altEvent = None
+
+                for nextExonCoord in exon.nextExons:
+                    nextExon = exons[nextExonCoord]
+                    junction = ModelJunction(exon.chrom, exon.end,
+                                        nextExon.start, altEvent)
+
+                    juncCoord = '%s:%d-%d' % (exon.chrom,
+                                                exon.end,
+                                                nextExon.start)
+                    try:
+                        j = junctions[juncCoord]
+                    except KeyError:
+                        junctions[juncCoord] = junction
+
+    #print >> sys.stderr, junctions.keys()
     return junctions
 
 if __name__ == '__main__':
 
-    print >> sys.stderr, 'parsing models...'
     modelsFileName = sys.argv[1]
-    models = parseJunctions(modelsFileName)
+
+    genes = {}
+    exons = {}
+
+    print >> sys.stderr, 'Tagging model junctions ...'
+    for model in parseGeneModels(modelsFileName):
+        groupExons(genes, exons, model)
+
+    print >> sys.stderr, '%d genes, %d exons' % (len(genes), len(exons))
+
+    modelJunctions = identifyJunctions(genes, exons)
+
+    print >> sys.stderr, '%d junctions' % len(modelJunctions)
+
+    skipped = [k for k in modelJunctions.keys() if modelJunctions[k].event == \
+                'skippedExon']
+
+    altss = [k for k in modelJunctions.keys() if modelJunctions[k].event == \
+                'alternativeSpliceSite']
+
+    noAlt = [k for k in modelJunctions.keys() if not modelJunctions[k].event]
+
+
+    print >> sys.stderr, '\n'
+    print >> sys.stderr, 'parsing junctions 1 ...'
+    junctions1 = parseJunctions(sys.argv[2])
     print >> sys.stderr, '\n'
 
-    print >> sys.stderr, 'parsing junctions...'
-    junctions1 = buildJunctionDict(parseJunctions(sys.argv[2]))
+    print >> sys.stderr, 'parsing junctions 2 ...'
+    junctions2 = parseJunctions(sys.argv[3])
     print >> sys.stderr, '\n'
 
-    print >> sys.stderr, 'parsing junctions...'
-    junctions2 = buildJunctionDict(parseJunctions(sys.argv[3]))
-    print >> sys.stderr, '\n'
+    diff1 = set(junctions1.keys()).difference(set(junctions2.keys()))
+    diff2 = set(junctions2.keys()).difference(set(junctions1.keys()))
 
-    print >> sys.stderr, 'searching for an alternative splicing...'
-    altSplicing = findAlternativeSplicing(modelsFileName, junctions1, junctions2)
+    print >> sys.stderr, '%d skipped exons' % len(skipped)
+    print >> sys.stderr, '%d skipped exons' % len(altss)
+    print >> sys.stderr, '%d skipped exons' % len(noAlt)
+    print >> sys.stderr, 'Junctions1 diff junctions2 %d junctions' % len(diff1)
+    print >> sys.stderr, 'Junctions2 diff junctions1 %d junctions' % len(diff2)
 
-    for k in altSplicing:
-        for j in altSplicing[k]:
-            key = '%s-%d' % (k, j)
-            try:
-                transcript = models[key]
-            except KeyError:
-                pass
-            else:
-                print('{0}\t{1}'.format(key, ','.join(transcript.name)))
+    for k in diff1:
+        try:
+            j = modelJunctions[k]
+        except KeyError:
+            pass
+        else:
+            print('{0}\t{1}\t1\t{2}'.format(k, j.event, junctions1[k].coverage))
+
+    print >> sys.stderr, k
+    for k in diff2:
+        try:
+            j = modelJunctions[k]
+        except KeyError:
+            pass
+        else:
+            print('{0}\t{1}\t2\t{2}'.format(k, j.event, junctions2[k].coverage))
