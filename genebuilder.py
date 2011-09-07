@@ -787,7 +787,7 @@ def main(options, args):
                                 linkedExons, exonPositions,
                                 endExons)
         if n % 1000 == 0:
-            print sys.stderr, '...', n
+            print >> sys.stderr, '...', n
 
     sumExons = {}
     for ref, end in exons:
