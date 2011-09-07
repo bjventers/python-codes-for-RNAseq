@@ -21,10 +21,19 @@ def read(fobj, comment):
         fobj = file object.
         comment = read() will ignore the line starting with comment character.
     '''
+    n = 0
     for line in fobj:
         if line.startswith(comment): continue
         attrib = {}
         rows = line.split()
+
+        try:
+            assert len(rows) == 21
+        except AssertionError:
+            print >> sys.stderr, '>%d' % n, line
+            n += 1
+            continue
+
         attrib['matches'] = rows[0]
         attrib['misMatches'] = rows[1]
         attrib['repMatches'] = rows[2]
@@ -42,14 +51,22 @@ def read(fobj, comment):
         attrib['tSize'] = rows[14]
         attrib['tStart'] = rows[15]
         attrib['tEnd'] = rows[16]
-        attrib['blockCount'] = rows[17]
+        attrib['blockCount'] = int(rows[17])
         attrib['blockSizes'] = rows[18].split(',')[:-1]
         attrib['qStarts'] = rows[19].split(',')[:-1]
         attrib['tStarts'] = rows[20].split(',')[:-1]
-        if len(attrib['tStarts']) == 1: continue
+        if len(attrib['tStarts']) == 1:
+            n += 1
+            continue
         
         pobj = PSL(**attrib) # pobj = PSL object
-        yield pobj
+        if attrib['blockCount'] == 0:
+            print >> sys.stderr, '>%d' % n, line
+            n += 1
+            continue
+        else:
+            n += 1
+            yield pobj
 
 if __name__ == '__main__':
     pass
