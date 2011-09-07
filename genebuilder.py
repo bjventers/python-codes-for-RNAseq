@@ -158,6 +158,7 @@ def deleteGap(tName, tStarts, blockSizes):
     exonSet = []
     i = 0
     ref, start, end = tName, tStarts[0], tStarts[0] + blockSizes[0]
+
     while i < range(len(tStarts)):
         try:
             ref, nextStart, nextEnd = tName, tStarts[i + 1], \
@@ -775,7 +776,7 @@ def main(options, args):
     endExons = {}
     print >> sys.stderr, 'Minimum UTR length = ', options.minimumUTRLength
     print >> sys.stderr, 'Parsing and clustering exons..'
-    for alnObj in psl_parser.read(open(options.infile), 'track'):
+    for n, alnObj in enumerate(psl_parser.read(open(options.infile), 'track')):
         tStarts = alnObj.attrib['tStarts']
         blockSizes = alnObj.attrib['blockSizes']
         tName = alnObj.attrib['tName']
@@ -856,6 +857,9 @@ def main(options, args):
                 except KeyError:
                     allGenes[chrom][geneID] = [isoform]
             isoformID += 1
+        n += 1
+        if n % 1000 == 0:
+            print >> sys.stderr, '...', n
 
     print >> sys.stderr, 'Removing redundant sequences..'
     findRedundantSequence(allGenes)
