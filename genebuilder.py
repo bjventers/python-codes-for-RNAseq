@@ -786,6 +786,9 @@ def main(options, args):
                                 clusterConnections,
                                 linkedExons, exonPositions,
                                 endExons)
+        if n % 1000 == 0:
+            print sys.stderr, '...', n
+
     sumExons = {}
     for ref, end in exons:
         try:
