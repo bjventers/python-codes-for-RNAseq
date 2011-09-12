@@ -206,6 +206,17 @@ class TestConstructExons(unittest.TestCase):
         for start, end, seqType in transcript.exons[1:-2]:
             self.assertEqual(seqType, 'CDS')
 
+    def testTranscriptFeaturesNormalPositiveStrandNo_3_UTR(self):
+        self.row[7] = 80306166  # change thickStart
+        transcript = bed2gff.parseBed(self.row)
+
+        self.assertEqual(10, len(transcript.exons))
+
+        self.assertEqual((80306164, 80306166, 'stopCodon'), transcript.exons[-1])
+
+        for start, end, seqType in transcript.exons[2:-1]:
+            self.assertEqual(seqType, 'CDS')
+
     def testTranscriptFeaturesNormalNegativeStrandNo_3_UTR(self):
         self.row[5] = '-'  # change strand
         self.row[6] = 80303035
@@ -218,6 +229,18 @@ class TestConstructExons(unittest.TestCase):
         self.assertEqual((80305597, 80306166,'UTR'), transcript.exons[-1])
 
         for start, end, seqType in transcript.exons[1:-2]:
+            self.assertEqual(seqType, 'CDS')
+
+    def testTranscriptFeaturesNormalNegativeStrandNo_5_UTR(self):
+        self.row[5] = '-'  # change strand
+        self.row[7] = 80306166
+        transcript = bed2gff.parseBed(self.row)
+
+        #self.assertEqual(11, len(transcript.exons))
+
+        self.assertEqual((80306164, 80306166, 'startCodon'), transcript.exons[-1])
+
+        for start, end, seqType in transcript.exons[2:-1]:
             self.assertEqual(seqType, 'CDS')
 
 
