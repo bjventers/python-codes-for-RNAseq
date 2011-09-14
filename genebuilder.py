@@ -642,27 +642,6 @@ def cleanUpLinkedExons(allExons, linkedExons,
     '''
 
 
-def getReadingFrameBLAST(seq):
-    '''Deprecated'''
-
-    result = NCBIWWW.qblast('blastx', 'nr', seq)
-    blastRecord = NCBIXML.read(result)
-    for alignment in blastRecord.alignments:
-        for hsp in alignment.hsps:
-            print >> sys.stderr, '***alignment****'
-            print >> sys.stderr, 'sequence:', alignment.title
-            print >> sys.stderr, 'length:', alignment.length
-            print >> sys.stderr, 'e value:', hsp.expect
-            print >> sys.stderr, hsp.query[0:75] + '...'
-            print >> sys.stderr, hsp.match[0:75] + '...'
-            print >> sys.stderr, hsp.sbjct[0:75] + '...'
-            print >> sys.stderr, hsp.frame
-            print >> sys.stderr, hsp.query_start
-            print >> sys.stderr, hsp.query_end
-        break
-    return hsp.frame[0], hsp.query_start, hsp.query_end
-
-
 def getStartStopCodon(gene, genome):
     seq = ''
     for exon in gene:
@@ -745,25 +724,6 @@ def findRedundantSequence(allGenes):
                             if str(isoform1.dnaSeq) == str(isoform2.dnaSeq):
                                 isoform2.redundant = True
     return None
-
-
-def saveToDB(allGenes):
-    conn = sqlite3.connect('geneModels')
-    cursor = conn.cursor()
-
-    cursor.execute('''
-                    create table models (
-                    isoformID varchar,
-                    chrom varchar,
-                    chromStart integer,
-                    chromEnd integer,
-                    cdsStart integer,
-                    cdsEnd integer,
-                    strand varchar,
-                    exonStarts varchar,
-                    exonEnds varchar)
-                    ''')
-    cursor.execute('''create index isoformID on models (isoformID)''')
 
 
 def main(options, args):
@@ -907,7 +867,7 @@ def main(options, args):
                                                 ''')
                         isoformProteinSeqs.append(proteinRecord)
                         isoformRNASeqs.append(RNARecord)
-                        isoformID += 1
+                    isoformID += 1
 
                 if n > 0 and n % 1000 == 0:
                     print >> sys.stderr, '...', n, 'transcripts done.'
