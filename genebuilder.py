@@ -5,12 +5,12 @@
 The output is in BED format which can be visualized in UCSC genome browser.
 The script requires the alignment of transcript assembly from
 velvet + oases to the referecne genome.
-The alignment has to be in PSL format from GMAP, BLAT.
+The alignment has to be in PSL format from GMAP or BLAT.
 
-Usage: python exon_grouper.py [transcripts.psl]
+Run python genebuilder.py -h for help.
 The output is written in a standard output.
 
-The script is tested in Python 2.7.2
+The script is written in Python 2.7.2
 
 Author: Likit Preeyanon
 Email: preeyano@msu.edu
@@ -144,8 +144,9 @@ class Isoform(object):
 
 def deleteGap(tName, tStarts, blockSizes):
     '''
-        Delete all small gaps and overlapped exons.
+        Delete small gaps (<GAPSIZE) and overlapped exons.
     '''
+    GAPSIZE = 21
 
     exonSet = []
     i = 0
@@ -159,7 +160,7 @@ def deleteGap(tName, tStarts, blockSizes):
             exonSet.append((tName, start, end))
             break
         else:
-            if nextStart - end < 21:
+            if nextStart - end < GAPSIZE:
                 end = nextEnd
             else:
                 exonSet.append((tName, start, end))
@@ -266,8 +267,9 @@ def construct(tName, tStarts, blockSizes, exons,
     else:
         '''
             If no exons connects to any exon in existing clusters,
-            new cluster will be created for the new group of exons.
-            All new exons are also added to the exons database.
+        a new cluster will be created for the new group of exons.
+        All new exons are also added to the exons database.
+
         '''
         clusters[(tName, newClusterID)] = exonGroup
         clusterConnections[(tName, newClusterID)] = set([])
@@ -283,9 +285,8 @@ def construct(tName, tStarts, blockSizes, exons,
 
 def walk(allExons, nodes, clusters, clusterConnections, visited):
 
-    ''' This function walks over all clusters connected to
-    the starting cluster and combine all exons to those is
-    the starting cluster.
+    '''Walks over all clusters connected to the starting cluster
+    and combine all exons to those in the starting cluster.
 
     '''
     if nodes not in visited:
@@ -302,7 +303,7 @@ def walk(allExons, nodes, clusters, clusterConnections, visited):
 
 def mergeClusters(clusters, clusterConnections):
 
-    ''' This function merge all clusters sharing at least one exon
+    ''' Merges all clusters sharing at least one exon
     together to form a bigger cluster.
 
     '''
@@ -323,6 +324,9 @@ def mergeClusters(clusters, clusterConnections):
 
 
 def walkFork(nodes, linkedExons, passed, paths, visited, ignored, txExons):
+
+    '''Walks to all branches of a graph.'''
+
     nodes = sorted(nodes)
     if nodes:
         while nodes:
@@ -343,6 +347,9 @@ def walkFork(nodes, linkedExons, passed, paths, visited, ignored, txExons):
 
 
 def buildPaths(linkedExons, txExons, allPaths, ignored, visited):
+
+    '''Builds all possible paths from all exon connection.'''
+
     paths = []
     for c in sorted(txExons):
         if c not in visited and c not in ignored:
@@ -358,6 +365,13 @@ def buildPaths(linkedExons, txExons, allPaths, ignored, visited):
 
 
 def findORF(isoform):
+
+    '''Find an open reading frame (ORF) of a transcript
+    based solely on start and stop codons.
+    Returns the longest ORF, a start and a stop codon.
+
+    '''
+
     isoform.frame, isoform.startCodon, isoform.stopCodon, \
             isoform.length = isoform._getStartStopCodon()
 
@@ -410,6 +424,9 @@ def buildGeneModels(mergedClusters, exonPositions):
 
 
 def getSequenceExonWiseIsoform(allPaths, genome):
+
+    '''Optional function: not involved in gene model building.'''
+
     allSequences = {}
     sequences = []
     for cl in allPaths:
@@ -425,6 +442,9 @@ def getSequenceExonWiseIsoform(allPaths, genome):
 
 
 def getSequenceExonWiseUnigene(allPaths, genome):
+
+    '''Optional function: not involved in gene model building.'''
+
     for cl in allPaths:
         ref, ID = cl
         seq = ''
@@ -438,6 +458,8 @@ def getSequenceExonWiseUnigene(allPaths, genome):
 
 
 def printBedUnigene(clusters):
+
+    '''Optional function: not involved in gene model building.'''
 
     writer = csv.writer(sys.stdout, dialect='excel-tab')
     for ref, ID in clusters:
@@ -473,6 +495,9 @@ def printBedUnigene(clusters):
 
 
 def writeBEDFile(allGenes, basename):
+
+    '''Prints gene models in BED format to standard output.'''
+
     writer = csv.writer(open(basename + '.models.bed', 'w'),
                         dialect='excel-tab')
     for chrom in allGenes:
@@ -723,6 +748,9 @@ def getStartStopCodon(gene, genome):
 
 
 def findRedundantSequence(allGenes):
+
+    '''Finds and flags isoforms that possesses the same DNA sequence.'''
+
     for chrom in allGenes:
         for geneID in allGenes[chrom]:
             for isoform1 in allGenes[chrom][geneID]:
@@ -849,8 +877,10 @@ def main(options, args):
     isoformDNASeqs = []
     isoformProteinSeqs = []
     isoformRNASeqs = []
+    totalGenes = 0
     for chrom in allGenes:
         for geneID in allGenes[chrom]:
+            totalGenes += 1
             isoformID = 0
             for isoform in allGenes[chrom][geneID]:
                 if not isoform.redundant:
@@ -863,6 +893,7 @@ def main(options, args):
                     isoformDNASeqs.append(DNARecord)
 
                     '''Search for ORF for non-redundant sequences'''
+
                     print >> sys.stderr, 'searching ORF: %s:%d.%d' \
                                             % (chrom, geneID,isoformID)
                     findORF(isoform)
@@ -879,7 +910,7 @@ def main(options, args):
                 if n > 0 and n % 1000 == 0:
                     print >> sys.stderr, '...', n, 'transcripts done.'
 
-    print >> sys.stderr, 'Total genes = ', len(allGenes)
+    print >> sys.stderr, 'Total genes = %d\n\n', totalGenes
     print >> sys.stderr, 'Writing gene models to file...'
     writeBEDFile(allGenes, options.basename)
     print >> sys.stderr, 'Writing DNA sequences to file...'
