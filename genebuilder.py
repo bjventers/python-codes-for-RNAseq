@@ -19,13 +19,11 @@ Email: preeyano@msu.edu
 
 import sys
 import csv
-import sqlite3
 from optparse import OptionParser
 from operator import itemgetter
 
 from pygr import seqdb
 from Bio import SeqIO
-from Bio.Blast import NCBIWWW, NCBIXML
 from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC
 from Bio.Data import CodonTable
@@ -55,28 +53,21 @@ class Isoform(object):
         self.exons = sorted(exons)
         self.chromStart = exons[0][1]
         self.chromEnd = exons[-1][-1]
-        self.frame, self.startCodon, self.stopCodon, \
-                self.length, self.dnaSeq = self.__getStartStopCodon(genome)
         self.redundant = False
+        self.dnaSeq = self._getDnaSeq(genome)
 
-        if self.frame:
-            self.mrnaSeq = self.dnaSeq.transcribe()
-            self.orf, self.proteinSeq = self.__getProteinSeq()
-        else:
-            self.mrnaSeq = None
-            self.orf = None
-            self.proteinSeq = None
-
-        self.strand = '+' if self.frame > 0 else '-'
-
-    def __getStartStopCodon(self, genome):
-        seq = ''
+    def _getDnaSeq(self, genome):
+        dnaSeq = ''
         for exon in self.exons:
             r, start, end = exon
-            seq += str(genome[r][start:end])
+            dnaSeq += str(genome[r][start:end])
 
         '''Create biopython seqObject'''
-        bioSeq = Seq(seq.upper(), IUPAC.ambiguous_dna)
+        bioSeq = Seq(dnaSeq.upper(), IUPAC.ambiguous_dna)
+        return bioSeq
+
+    def _getStartStopCodon(self):
+
         seqLengths = []
 
         '''Define Standard Start/Stop codons'''
@@ -87,7 +78,7 @@ class Isoform(object):
             i = frame
             start = False
             while True:
-                codon = str(bioSeq[i:i + 3])
+                codon = str(self.dnaSeq[i:i + 3])
                 if len(codon) < 3:
                     break
                 if not start:
@@ -101,11 +92,12 @@ class Isoform(object):
                         i = startPos
                         start = False
                 i += 3
+                #print >> sys.stderr, 'move on to ', i, len(seq), self.isoformID, self.geneID
 
         ''' Reverse direction'''
 
-        '''Get a reverse complement of bioseq'''
-        bioRevSeq = bioSeq.reverse_complement()
+        '''Get a reverse complement of dnaSeq'''
+        bioRevSeq = self.dnaSeq.reverse_complement()
 
         for frame in range(3):
             i = frame
@@ -131,13 +123,13 @@ class Isoform(object):
             frame, startCodon, stopCodon, length \
                     = sorted(seqLengths, key=lambda x: x[-1])[-1]
             if frame > 0:
-                return frame, startCodon, stopCodon, length, bioSeq
+                return frame, startCodon, stopCodon, length
             else:
-                return frame, startCodon, stopCodon, length, bioRevSeq
+                return frame, startCodon, stopCodon, length
         else:
-            return (None, None, None, None, bioSeq)
+            return None, None, None, None
 
-    def __getProteinSeq(self):
+    def _getProteinSeq(self):
         if self.frame:
             orf = self.mrnaSeq[self.startCodon:self.stopCodon]
             return orf, orf.translate(cds=True)
@@ -208,8 +200,11 @@ def construct(tName, tStarts, blockSizes, exons,
     exonGroup = set([])
     connection = set([])
     exonSet = deleteGap(tName, tStarts, blockSizes)
+
+    '''
     if len(exonSet) == 1:
         return newClusterID
+    '''
 
     for i in range(len(exonSet)):
         tName, start, end = exonSet[i]
@@ -361,6 +356,23 @@ def buildPaths(linkedExons, txExons, allPaths, ignored, visited):
                                         )
     return paths
 
+
+def findORF(isoform):
+    isoform.frame, isoform.startCodon, isoform.stopCodon, \
+            isoform.length = isoform._getStartStopCodon()
+
+    if isoform.frame < 0:
+        isoform.dnaSeq = isoform.dnaSeq.reverse_complement()
+
+    if isoform.frame:
+        isoform.mrnaSeq = isoform.dnaSeq.transcribe()
+        isoform.orf, isoform.proteinSeq = isoform._getProteinSeq()
+    else:
+        isoform.mrnaSeq = None
+        isoform.orf = None
+        isoform.proteinSeq = None
+
+    isoform.strand = '+' if isoform.frame > 0 else '-'
 
 def buildGeneModels(mergedClusters, exonPositions):
 
@@ -723,6 +735,10 @@ def findRedundantSequence(allGenes):
                         else:
                             if str(isoform1.dnaSeq) == str(isoform2.dnaSeq):
                                 isoform2.redundant = True
+                                print >> sys.stderr, 'removed %s:%d.%d' % (
+                                                            isoform2.chrom,
+                                                            isoform2.geneID,
+                                                            isoform2.isoformID)
     return None
 
 
@@ -734,13 +750,18 @@ def main(options, args):
     linkedExons = {}
     exonPositions = {}
     endExons = {}
+    singleton = 0
+
     print >> sys.stderr, 'Minimum UTR length = ', options.minimumUTRLength
     print >> sys.stderr, 'Parsing and clustering exons..'
     for n, alnObj in enumerate(psl_parser.read(open(options.infile), 'track')):
         tStarts = alnObj.attrib['tStarts']
         blockSizes = alnObj.attrib['blockSizes']
+
+        if len(blockSizes) == 1:
+            singleton += 1
+
         tName = alnObj.attrib['tName']
-        qName = alnObj.attrib['qName']
         newClusterID = construct(tName, tStarts, blockSizes,
                                 exons, clusters, newClusterID,
                                 clusterConnections,
@@ -748,6 +769,8 @@ def main(options, args):
                                 endExons)
         if n % 1000 == 0:
             print >> sys.stderr, '...', n
+
+    print >> sys.stderr, 'Total singletons = ', singleton
 
     sumExons = {}
     for ref, end in exons:
@@ -779,9 +802,9 @@ def main(options, args):
                         endExons,
                         exonPositions,
                         ignored)
+
     print >> sys.stderr, '\nConstructing transcripts..'
     allPaths = {}
-    gtTenIsoform = 0
     visited = set([])
     for n, cl in enumerate(mergedClusters):
         txExons = sorted(mergedClusters[cl])
@@ -791,23 +814,17 @@ def main(options, args):
             if n > 0:
                 print >> sys.stderr, '... %d built..' % n
 
-    #geneModels = buildGeneModels(mergedClusters, exonPositions)
-    #print >> sys.stderr, '\nWriting gene models in BED format..\n'
-    #print >> sys.stderr, mergedClusters
-    #printBedUnigene(geneModels)
-    #getSequenceExonWiseUnigene(geneModels, genome)
     genome = seqdb.SequenceFileDB(options.genome, verbose=False)
-    #allSequences = getSequenceExonWiseIsoform(allPaths, genome)
-    #checkReadingFrame(allSequences)
 
     '''Create isoform objects from allPaths and
     search for ORF.
 
     '''
+    print >> sys.stderr, '\nBuilding gene models..'
     allGenes = {}
-    print >> sys.stderr, 'Searching for ORF...'
     n = 0
     for chrom, geneID in allPaths:
+        n += 1
         isoformID = 0
         for isoExons in allPaths[(chrom, geneID)]:
             isoform = Isoform(chrom, geneID, isoformID, isoExons, genome)
@@ -820,12 +837,13 @@ def main(options, args):
                 except KeyError:
                     allGenes[chrom][geneID] = [isoform]
             isoformID += 1
-        n += 1
-        if n % 1000 == 0:
-            print >> sys.stderr, '...', n
 
-    print >> sys.stderr, 'Removing redundant sequences..'
+            if n % 1000 == 0:
+                print >> sys.stderr, '...', n
+
+    print >> sys.stderr, '\nRemoving redundant sequences..'
     findRedundantSequence(allGenes)
+
 
     '''Creating sequence records for each DNA, RNA and protein sequences.'''
     isoformDNASeqs = []
@@ -837,34 +855,23 @@ def main(options, args):
             for isoform in allGenes[chrom][geneID]:
                 if not isoform.redundant:
                     isoform.isoformID = isoformID
-                    isoformName = '%s_%d_%d' % (chrom,
+                    isoformName = '%s:%d.%d' % (chrom,
                                                 geneID,
                                                 isoform.isoformID)
                     DNARecord = SeqRecord(isoform.dnaSeq,
-                                            id=isoformName,
-                                            description='''
-                                            DNA sequence from predicted
-                                            gene models of chickens line
-                                            6 & 7
-                                            ''')
+                                            id=isoformName)
                     isoformDNASeqs.append(DNARecord)
+
+                    '''Search for ORF for non-redundant sequences'''
+                    print >> sys.stderr, 'searching ORF: %s:%d.%d' \
+                                            % (chrom, geneID,isoformID)
+                    findORF(isoform)
 
                     if isoform.frame:
                         proteinRecord = SeqRecord(isoform.proteinSeq,
-                                                    id=isoformName,
-                                                    description='''
-                                                    protein sequence
-                                                    from predicted
-                                                    gene models of
-                                                    chickens line 6 & 7
-                                                    ''')
+                                                    id=isoformName)
                         RNARecord = SeqRecord(isoform.mrnaSeq,
-                                                id=isoformName,
-                                                description='''
-                                                mRNA sequence from predicted
-                                                gene models of chickens line
-                                                6 & 7
-                                                ''')
+                                                id=isoformName)
                         isoformProteinSeqs.append(proteinRecord)
                         isoformRNASeqs.append(RNARecord)
                     isoformID += 1
@@ -872,7 +879,7 @@ def main(options, args):
                 if n > 0 and n % 1000 == 0:
                     print >> sys.stderr, '...', n, 'transcripts done.'
 
-    print >> sys.stderr, 'total genes = ', len(allGenes)
+    print >> sys.stderr, 'Total genes = ', len(allGenes)
     print >> sys.stderr, 'Writing gene models to file...'
     writeBEDFile(allGenes, options.basename)
     print >> sys.stderr, 'Writing DNA sequences to file...'
