@@ -132,22 +132,33 @@ def findExtendedEnd(cluster1, cluster2, db1, db2):
     leftExtension = []
     rightExtension = []
 
-    roots1 = [n for n in cluster1.nodes() if not cluster1.predecessors(n)]
-    roots2 = [n for n in cluster2.nodes() if not cluster2.predecessors(n)]
+    leftNodes1 = [n for n in cluster1.nodes() if not cluster1.predecessors(n)]
+    leftNodes2 = [n for n in cluster2.nodes() if not cluster2.predecessors(n)]
 
-    for r1 in roots1:
-        for r2 in roots2:
-            if set(cluster1.neighbors(r1)). \
-                    intersection(set(cluster2.neighbors(r2))):
-                exon1 = db1[r1]
-                exon2 = db2[r2]
+    for n1 in leftNodes1:
+        for n2 in leftNodes2:
+            if set(cluster1.neighbors(n1)). \
+                    intersection(set(cluster2.neighbors(n2))):
+                exon1 = db1[n1]
+                exon2 = db2[n2]
 
                 if exon1.end == exon2.end:
-                    if exon1.start < exon2.start:
-                        leftExtension.append(r1)
-                elif exon1.start == exon2.start:
-                    if exon1.end > exon2.end:
-                        rightExtension.append(r1)
+                    if exon1.start > exon2.start:
+                        leftExtension.append(n1)
+
+    rightNodes1 = [n for n in cluster1.nodes() if not cluster1.successors(n)]
+    rightNodes2 = [n for n in cluster2.nodes() if not cluster2.successors(n)]
+
+    for n1 in rightNodes1:
+        for n2 in rightNodes2:
+            if set(cluster1.predecessors(n1)). \
+                    intersection(set(cluster2.predecessors(n2))):
+                exon1 = db1[n1]
+                exon2 = db2[n2]
+
+                if exon1.start == exon2.start:
+                    if exon1.end < exon2.end:
+                        rightExtension.append(n1)
 
     return leftExtension, rightExtension
 
@@ -176,12 +187,11 @@ def findPathDiff(db1, db2):
                 newCluster = nx.DiGraph()
                 newCluster.add_edges_from([e for e in cl1.edges()\
                                             if e not in cl2.edges()])
-                '''
-                if isExtendedEnd(cl1, cl2, db1, db2):
-                    pass
-                else:
-                '''
-                alteredPaths += getPath(newCluster)
+                for node in newCluster.nodes():
+                    for path in getPath(cl1):
+                        if node in path and path not in alteredPaths:
+                            alteredPaths.append(path)
+
                 checked += cl1.nodes()
 
     for exon in db1:
@@ -195,7 +205,6 @@ def findPathDiff(db1, db2):
             checked += cl1.nodes()
 
     return missingPaths, alteredPaths
-
 
 
 def main(file1, file2):
