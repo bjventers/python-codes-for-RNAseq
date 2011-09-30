@@ -385,7 +385,32 @@ class TestFindExtendedEnds(unittest.TestCase):
         db2 = {}
         clusters = []
 
-        exons1 = [self.aa1, self.c1, self.d1, self.e1, self.f1]
+        exons1 = [self.aa2, self.c1, self.d1, self.e1, self.f1]
+        exons2 = [self.aa1, self.c2, self.d2, self.e2, self.f2, self.gg2]
+
+        comp.addExon(db1, clusters, exons1)
+        comp.addExon(db2, clusters, exons2)
+
+        missingPaths, alteredPaths = comp.findPathDiff(db2, db1)
+
+        self.assertEqual(len(missingPaths), 0)
+        self.assertEqual(len(alteredPaths), 1)
+
+        cluster1 = self.aa2.cluster
+        cluster2 = self.aa1.cluster
+
+        leftExtension, rightExtension = \
+                comp.findExtendedEnd(cluster1, cluster2, db1, db2)
+
+        self.assertEqual(len(leftExtension), 1)
+        self.assertEqual(len(rightExtension), 0)
+
+    def TestRightExtension(self):
+        db1 = {}
+        db2 = {}
+        clusters = []
+
+        exons1 = [self.aa2, self.c1, self.d1, self.e1, self.f1, self.gg1]
         exons2 = [self.aa2, self.c2, self.d2, self.e2, self.f2, self.gg2]
 
         comp.addExon(db1, clusters, exons1)
@@ -394,14 +419,38 @@ class TestFindExtendedEnds(unittest.TestCase):
         missingPaths, alteredPaths = comp.findPathDiff(db2, db1)
 
         self.assertEqual(len(missingPaths), 0)
-        self.assertEqual(len(alteredPaths), 2)
+        self.assertEqual(len(alteredPaths), 1)
 
-        cluster1 = self.aa1.cluster
-        cluster2 = self.aa2.cluster
+        cluster1 = self.gg1.cluster
+        cluster2 = self.gg2.cluster
 
-        leftExtension, rightExtension = comp.findExtendedEnd(cluster1,
-                                                        cluster2,
-                                                            db1,
-                                                            db2)
+        leftExtension, rightExtension = \
+                comp.findExtendedEnd(cluster1, cluster2, db1, db2)
+
+        self.assertEqual(len(leftExtension), 0)
+        self.assertEqual(len(rightExtension), 1)
+
+    def TestLeftRightExtension(self):
+        db1 = {}
+        db2 = {}
+        clusters = []
+
+        exons1 = [self.aa2, self.c1, self.d1, self.e1, self.f1, self.gg1]
+        exons2 = [self.aa1, self.c2, self.d2, self.e2, self.f2, self.gg2]
+
+        comp.addExon(db1, clusters, exons1)
+        comp.addExon(db2, clusters, exons2)
+
+        missingPaths, alteredPaths = comp.findPathDiff(db1, db2)
+
+        self.assertEqual(len(missingPaths), 0)
+        self.assertEqual(len(alteredPaths), 1)
+
+        cluster1 = self.gg1.cluster
+        cluster2 = self.gg2.cluster
+
+        leftExtension, rightExtension = \
+                comp.findExtendedEnd(cluster1, cluster2, db1, db2)
+
         self.assertEqual(len(leftExtension), 1)
-        self.assertEqual(len(rightExtension), 0)
+        self.assertEqual(len(rightExtension), 1)
