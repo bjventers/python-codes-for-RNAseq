@@ -29,6 +29,23 @@ class TestDb(unittest.TestCase):
         self.f3 = comp.ExonObj('1', 1100, 1200)
         self.g3 = comp.ExonObj('1', 1300, 1400)
 
+    def testAddNoExon(self):
+        db = {}
+        clusters = []
+        exons1 = []
+
+        self.assertRaises(ValueError, comp.addExon, db, clusters, exons1)
+
+    def testAddOneClusterWithOneExon(self):
+        db = {}
+        clusters = []
+        exons1 = [self.a1]
+
+        comp.addExon(db, clusters, exons1)
+        self.assertEqual(len(db), 1)
+        self.assertEqual(len(self.a1.cluster.nodes()), 1)
+        self.assertEqual(self.a1.cluster.edges(), [])
+
     def testAddExonOneCluster(self):
         db = {}
         clusters = []
@@ -102,6 +119,19 @@ class TestWalkDown(unittest.TestCase):
         self.f3 = comp.ExonObj('1', 1100, 1200)
         self.g3 = comp.ExonObj('1', 1300, 1400)
 
+    def testSingleExonPath(self):
+        db = {}
+        clusters = []
+        exons1 = [self.a1]
+        comp.addExon(db, clusters, exons1)
+
+        path = []
+        allPath = []
+
+        comp.walkDown(self.a1.coord, path, allPath, self.a1.cluster) 
+        self.assertEqual(len(allPath), 1)
+        self.assertEqual(allPath, [[]])
+
     def testSinglePath(self):
         db = {}
         clusters = []
@@ -147,19 +177,29 @@ class TestWalkDown(unittest.TestCase):
         comp.addExon(db, clusters, exons2)
 
         path = []
-        allPath = []
+        allPaths = []
 
-        comp.walkDown(self.a1.coord, path, allPath, self.a1.cluster)
-        self.assertEqual(len(allPath), 4)
+        comp.walkDown(self.a1.coord, path, allPaths, self.a1.cluster)
+        self.assertEqual(len(allPaths), 4)
 
-        self.assertEqual(allPath[0], [str(self.b1), str(self.d1),
-                                        str(self.f1), str(self.g1)])
-        self.assertEqual(allPath[1], [str(self.b1), str(self.d1),
-                                        str(self.e2), str(self.g1)])
-        self.assertEqual(allPath[2], [str(self.c2), str(self.d1),
-                                        str(self.f1), str(self.g1)])
-        self.assertEqual(allPath[3], [str(self.c2), str(self.d1),
-                                        str(self.e2), str(self.g1)])
+        expectedAllPaths = [[self.b1.coord,
+                                self.d1.coord,
+                                self.f1.coord,
+                                self.g1.coord],
+                            [self.b1.coord,
+                                self.d1.coord,
+                                self.e2.coord,
+                                self.g1.coord],
+                            [self.c2.coord,
+                                self.d1.coord,
+                                self.f1.coord,
+                                self.g1.coord],
+                            [self.c2.coord,
+                                self.d1.coord,
+                                self.e2.coord,
+                                self.g1.coord]]
+
+        self.assertListEqual(expectedAllPaths, allPaths)
 
 
 class TestgetPath(unittest.TestCase):
@@ -187,6 +227,19 @@ class TestgetPath(unittest.TestCase):
         self.e3 = comp.ExonObj('1', 900, 1000)
         self.f3 = comp.ExonObj('1', 1100, 1200)
         self.g3 = comp.ExonObj('1', 1300, 1400)
+
+    def testSingleNodePath(self):
+        db = {}
+        clusters = []
+        exons1 = [self.a1]
+        comp.addExon(db, clusters, exons1)
+
+        self.assertEqual(len(self.a1.cluster.nodes()), 1)
+
+        allPath = comp.getPath(self.a1.cluster)
+        self.assertEqual(len(allPath), 1)
+        self.assertEqual(len(allPath[0]), 1)
+        self.assertEqual(allPath[0][0], self.a1.coord)
 
     def testSinglePath(self):
         db = {}
@@ -295,7 +348,7 @@ class TestFindPathDiff(unittest.TestCase):
         self.f3 = comp.ExonObj('1', 1100, 1200)
         self.g3 = comp.ExonObj('1', 1300, 1400)
 
-    def TestOnePathDiff(self):
+    def testOnePathDiff(self):
         db1 = {}
         db2 = {}
         clusters = []
@@ -317,7 +370,7 @@ class TestFindPathDiff(unittest.TestCase):
         self.assertEqual(len(missingPaths), 0)
         self.assertEqual(len(alteredPaths), 1)
 
-    def TestTwoPathDiff(self):
+    def testTwoPathDiff(self):
         db1 = {}
         db2 = {}
         clusters = []
@@ -330,12 +383,17 @@ class TestFindPathDiff(unittest.TestCase):
         comp.addExon(db2, clusters, exons2)
         comp.addExon(db2, clusters, exons3)
 
+        missingPaths, alteredPaths = comp.findPathDiff(db1, db2)
+
+        self.assertEqual(len(missingPaths), 0)
+        self.assertEqual(len(alteredPaths), 1)
+
         missingPaths, alteredPaths = comp.findPathDiff(db2, db1)
 
         self.assertEqual(len(missingPaths), 0)
         self.assertEqual(len(alteredPaths), 2)
 
-    def TestOneMissingPath(self):
+    def testOneMissingPath(self):
         db1 = {}
         db2 = {}
         clusters = []
@@ -345,6 +403,11 @@ class TestFindPathDiff(unittest.TestCase):
 
         comp.addExon(db1, clusters, exons1)
         comp.addExon(db2, clusters, exons2)
+
+        missingPaths, alteredPaths = comp.findPathDiff(db1, db2)
+
+        self.assertEqual(len(missingPaths), 1)
+        self.assertEqual(len(alteredPaths), 0)
 
         missingPaths, alteredPaths = comp.findPathDiff(db2, db1)
 
@@ -380,7 +443,7 @@ class TestFindExtendedEnds(unittest.TestCase):
         self.f3 = comp.ExonObj('1', 1100, 1200)
         self.g3 = comp.ExonObj('1', 1300, 1400)
 
-    def TestLeftExtension(self):
+    def testLeftExtension(self):
         db1 = {}
         db2 = {}
         clusters = []
@@ -405,7 +468,7 @@ class TestFindExtendedEnds(unittest.TestCase):
         self.assertEqual(len(leftExtension), 1)
         self.assertEqual(len(rightExtension), 0)
 
-    def TestRightExtension(self):
+    def testRightExtension(self):
         db1 = {}
         db2 = {}
         clusters = []
@@ -430,7 +493,7 @@ class TestFindExtendedEnds(unittest.TestCase):
         self.assertEqual(len(leftExtension), 0)
         self.assertEqual(len(rightExtension), 1)
 
-    def TestLeftRightExtension(self):
+    def testLeftRightExtension(self):
         db1 = {}
         db2 = {}
         clusters = []
