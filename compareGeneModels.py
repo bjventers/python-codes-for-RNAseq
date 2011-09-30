@@ -55,7 +55,12 @@ def addExon(db, clusters, exons):
 
     '''Create a new cluster for all exons.'''
     newCluster = nx.DiGraph()
-    newCluster.add_path([e.coord for e in exons])
+    if len(exons) > 1:
+        newCluster.add_path([e.coord for e in exons])
+    elif len(exons) == 1:
+        newCluster.add_nodes_from([exons[0].coord])
+    else:
+        raise ValueError
 
     '''Check if any exon belongs to an existing cluster.'''
     exist = False
@@ -169,13 +174,13 @@ def findPathDiff(db1, db2):
     missingPaths = []
     alteredPaths = []
 
-    for exon in db1:
-        if exon in checked:
+    for exonCoord in db1:
+        if exonCoord in checked:
             continue
         else:
-            cl1 = db1[exon].cluster
+            cl1 = db1[exonCoord].cluster
             try:
-                cl2 = db2[exon].cluster
+                cl2 = db2[exonCoord].cluster
             except KeyError:
                 pass
             else:
@@ -194,15 +199,18 @@ def findPathDiff(db1, db2):
 
                 checked += cl1.nodes()
 
-    for exon in db1:
-        if exon not in checked:
+    for exonCoord in db1:
+        if exonCoord not in checked:
             '''Add all paths that contains the exon
             to a list of missing paths.
             
             '''
-            paths = getPath(cl1)
-            missingPaths += [p for p in paths if exon in p]
-            checked += cl1.nodes()
+            cluster = db1[exonCoord].cluster
+            paths = getPath(cluster)
+
+            missingPaths += [p for p in paths if exonCoord in p]
+
+            checked += cluster.nodes()
 
     return missingPaths, alteredPaths
 
@@ -214,10 +222,16 @@ def main(file1, file2):
     clusters2 = []
     
     for exons in parseBed(file1):
-        addExon(db1, clusters1, exons)  # add exons to a database
+        try:
+            addExon(db1, clusters1, exons)  # add exons to a database
+        except:  # need exceptions here.
+            pass
 
     for exons in parseBed(file2):
-        addExon(db2, clusters2, exons)
+        try:
+            addExon(db2, clusters2, exons)
+        except:
+            pass
 
     missingPaths, alteredPaths = findPathDiff(db1, db2)
 
@@ -234,3 +248,9 @@ def main(file1, file2):
 
 if __name__=='__main__':
     main(sys.argv[1], sys.argv[2])
+
+'''TODO
+1.submit changes to git.
+2.integrate findExtension to findPathDiff.
+3.add writeBED function to write an output to stdout.
+'''
